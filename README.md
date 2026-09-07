@@ -129,3 +129,5 @@ python3 test_static.py     # 8 checks against a plain static file server
                            # (exactly what GitHub Pages provides)
 python3 test_live.py       # same 8 checks against the deployed Pages site
 ```
+On the same device/browser: https://ewvarghese.github.io/ppe-survey/submissions.html → table + Export CSV button (opens in Excel/Sheets), or per-row view → Download JSON
+
