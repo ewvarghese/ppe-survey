@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Submitted surveys — AI PPE Detection</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 22px 80px; }
+  .head { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+  .head h1 { margin: 0; font-size: 21px; }
+  .head p { margin: 3px 0 0; color: var(--ink-soft); font-size: 13.5px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat b { display: block; font-size: 24px; letter-spacing: -.5px; }
+  .stat span { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .5px; }
+  .table-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto; }
+  .toolbar { padding: 12px 14px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar input[type=search] { max-width: 260px; }
+  .empty { padding: 40px; text-align: center; color: var(--ink-faint); }
+  td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--ink-soft); }
+  .mode-pill { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 99px; }
+  .mode-pill.srv { background: var(--ok-bg); color: var(--ok); }
+  .mode-pill.dev { background: var(--warn-bg); color: var(--warn-ink); }
+  .dev-only { background: #fffbe9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>Submitted surveys <span class="mode-pill dev" id="mode-pill">…</span></h1>
+      <p id="mode-note">Detecting storage…</p>
+    </div>
+    <div class="btn-row">
+      <a class="btn btn-ghost" href="index.html">← New survey</a>
+      <button class="btn btn-ghost" id="btn-refresh">Refresh</button>
+      <label class="btn btn-ghost" style="cursor:pointer">Import JSON
+        <input type="file" id="btn-import" accept="application/json" multiple style="display:none"></label>
+      <button class="btn btn-ghost" id="btn-upload" style="display:none">Upload device records to server</button>
+      <button class="btn btn-primary" id="btn-csv">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="table-card">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search company, city, reference…">
+      <select id="sort" style="max-width:230px">
+        <option value="date">Sort: newest first</option>
+        <option value="date_asc">Sort: oldest first</option>
+        <option value="intent">Sort: buying intent (high → low)</option>
+        <option value="cams">Sort: cameras in scope (high → low)</option>
+        <option value="company">Sort: company A → Z</option>
+      </select>
+      <span id="count" style="font-size:12.5px;color:var(--ink-faint)"></span>
+    </div>
+    <div id="table"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="schema.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+let ROWS = [];
+let SERVER = null;                 // true/false after probe
+const LS_SUBS = "ppe_survey_submissions_v1";
+
+/* ---------------- option-id -> label, shared with the form ---------------- */
+const LABEL_MAP = (() => {
+  const m = {};
+  (window.SURVEY_SCHEMA?.sections || []).forEach((sec) =>
+    (sec.fields || []).forEach((f) => {
+      (f.t === "repeater" ? f.fields : [f]).forEach((g) => {
+        if ((g.t === "select" || g.t === "choice") && Array.isArray(g.o)) {
+          const map = {};
+          g.o.forEach((o) => { if (o && typeof o === "object" && o.id) map[o.id] = o.label; });
+          if (Object.keys(map).length) m[g.k] = map;
+        }
+      });
+    }));
+  return m;
+})();
+const lbl = (key, v) => (LABEL_MAP[key] && LABEL_MAP[key][v]) || v;
+
+/* ------------------------------- helpers ------------------------------- */
+const g = (o, path) => path.split(".").reduce((a, k) => (a == null ? undefined : a[k]), o);
+const n = (v) => (v === "" || v == null || isNaN(Number(v)) ? null : Number(v));
+const dash = (v) => (v === null || v === undefined || v === "" ? "—" : v);
+function toast(m, k) { const t = $("#toast"); t.textContent = m; t.className = "toast show " + (k || ""); setTimeout(() => t.className = "toast", 2400); }
+function dl(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: type || "application/json" }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ------------------------- on-device submissions ------------------------ */
+function localSubs() { try { return JSON.parse(localStorage.getItem(LS_SUBS) || "[]"); } catch (e) { return []; } }
+function localSubsSave(list) { localStorage.setItem(LS_SUBS, JSON.stringify(list)); }
+
+/* -------------------- CSV flattening (mirrors app.py) -------------------- */
+function flatten(payload) {
+  const row = {};
+  const walk = (obj, prefix) => {
+    if (Array.isArray(obj)) {
+      if (obj.length && obj.every((x) => typeof x === "string" && x.startsWith("data:image"))) {
+        row[prefix.slice(0, -1)] = obj.length + " photo(s)"; return;
+      }
+      row[prefix.slice(0, -1)] = obj.map((item) =>
+        (item && typeof item === "object")
+          ? Object.entries(item)
+              .filter(([k, v]) => v !== "" && v != null && typeof v !== "object")
+              .map(([k, v]) => `${k}=${v}`).join("; ")
+          : String(item)
+      ).join(" | ");
+    } else if (obj && typeof obj === "object") {
+      Object.entries(obj).forEach(([k, v]) => walk(v, prefix + k + "."));
+    } else {
+      row[prefix.slice(0, -1)] = typeof obj === "boolean" ? (obj ? "Yes" : "No") : obj;
+    }
+  };
+  walk(payload, "");
+  return row;
+}
+function exportCSV(rows) {
+  const flat = rows.map((r) => {
+    const f = flatten(r.payload || {});
+    f._reference_id = r.ref; f._submitted_at = r.created_at || "";
+    if (r.device_only) f._stored = "this device only";
+    return f;
+  });
+  const headers = ["_reference_id", "_submitted_at"];
+  const seen = new Set(headers);
+  flat.forEach((f) => Object.keys(f).forEach((k) => { if (!seen.has(k)) { seen.add(k); headers.push(k); } }));
+  const esc = (v) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = [headers.join(",")]
+    .concat(flat.map((f) => headers.map((h) => esc(f[h])).join(",")))
+    .join("\r\n");
+  dl(`ppe-survey-export-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}.csv`, "\uFEFF" + csv, "text/csv");
+}
+
+/* ------------------------------- summarise ------------------------------ */
+function summarise(r) {
+  const p = r.payload || {};
+  return {
+    id: r.id, ref: r.ref, deviceOnly: !!r.device_only,
+    company: p.respondent?.company_name || r.company || "—",
+    location: p.respondent?.plant_location || r.site || "—",
+    industry: p.plant?.industry || "—",
+    date: p.respondent?.survey_date || (r.created_at || "").slice(0, 10) || "—",
+    submitted: r.created_at || "—",
+    surveyor: p.respondent?.surveyor_name || "—",
+    phone: p.respondent?.resp_mobile || "—",
+    totalCams: n(p.cameras?.total_cameras),
+    scopeCams: n(p.cameras?.cams_in_scope),
+    signal: lbl("signal_type", p.cameras?.signal_type || "") || "—",
+    rtsp: lbl("rtsp_access", p.cameras?.rtsp_access || "") || "—",
+    serverRoom: lbl("has_server_room", p.server?.has_server_room || "") || "—",
+    existingServer: lbl("has_existing_server", p.server?.has_existing_server || "") || "—",
+    gpu: p.server?.gpu_present || "—",
+    willing: lbl("willing_new_server", p.newhw?.willing_new_server || "") || "—",
+    willingId: p.newhw?.willing_new_server || "",
+    budget: p.newhw?.hw_budget || p.commercial?.total_budget || "—",
+    minAcc: n(p.model?.min_accuracy),
+    pilot: lbl("pilot_accept", p.model?.pilot_accept || "") || "—",
+    payModel: lbl("preferred_model", p.commercial?.preferred_model || "") || "—",
+    intent: n(p.commercial?.buying_signals),
+    priority: p.next?.priority || "—",
+    videoScore: n(p.next?.video_quality_score),
+    serverScore: n(p.next?.server_readiness_score),
+    fitScore: n(p.next?.fit_score),
+    projValue: n(p.next?.est_project_value),
+    payload: p,
+  };
+}
+function pill(v) { if (v == null) return "—"; return `<span class="pill ${v >= 7 ? "hi" : v >= 4 ? "mid" : "lo"}">${v}/10</span>`; }
+function money(v) {
+  if (v == null) return "—";
+  if (v >= 10000000) return "₹" + (v / 10000000).toFixed(2) + " Cr";
+  if (v >= 100000) return "₹" + (v / 100000).toFixed(2) + " L";
+  if (v >= 1000) return "₹" + (v / 1000).toFixed(1) + "k";
+  return "₹" + v;
+}
+
+/* -------------------------------- render -------------------------------- */
+function renderStats() {
+  const s = ROWS;
+  const hot = s.filter((r) => (r.intent ?? 0) >= 7).length;
+  const willing = s.filter((r) => ["yes_capex", "yes_lease", "yes_edge", "cloud", "maybe"].includes(r.willingId)).length;
+  const cams = s.reduce((a, r) => a + (r.scopeCams || 0), 0);
+  const val = s.reduce((a, r) => a + (r.projValue || 0), 0);
+  const gpuOk = s.filter((r) => /RTX|Tesla|A10|A16|A30|L4|L40|A4000|A5000|A6000|Jetson/i.test(r.gpu || "")).length;
+  $("#stats").innerHTML = [
+    ["Surveys", s.length],
+    ["Hot leads (intent ≥ 7)", hot],
+    ["Willing to invest in hardware", willing],
+    ["Cameras in scope (total)", cams],
+    ["Sites with a usable GPU", gpuOk],
+    ["Pipeline value (est.)", money(val || null)],
+  ].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+}
+
+function renderTable() {
+  const q = $("#q").value.trim().toLowerCase();
+  let rows = ROWS.slice();
+  if (q) rows = rows.filter((r) => JSON.stringify([r.company, r.location, r.ref, r.industry, r.surveyor]).toLowerCase().includes(q));
+  rows.sort({
+    date: (a, b) => String(b.submitted).localeCompare(String(a.submitted)),
+    date_asc: (a, b) => String(a.submitted).localeCompare(String(b.submitted)),
+    intent: (a, b) => (b.intent ?? -1) - (a.intent ?? -1),
+    cams: (a, b) => (b.scopeCams ?? -1) - (a.scopeCams ?? -1),
+    company: (a, b) => String(a.company).localeCompare(String(b.company)),
+  }[$("#sort").value]);
+  $("#count").textContent = rows.length + " shown";
+
+  if (!rows.length) {
+    $("#table").innerHTML = `<div class="empty">No surveys yet.<br><small>Fill the form and submit - or use <b>Import JSON</b> to load copies collected on field devices.</small></div>`;
+    return;
+  }
+
+  $("#table").innerHTML = `<table class="subs">
+    <thead><tr>
+      <th>Ref</th><th>Company / site</th><th>Industry</th><th>Visit date</th>
+      <th>Cameras<br><small>total / in scope</small></th><th>Camera type</th><th>Stream access</th>
+      <th>Server room</th><th>Existing server</th><th>GPU</th><th>New hardware</th><th>Budget</th>
+      <th>Min acc.</th><th>Pilot</th><th>Payment model</th><th>Intent</th><th>Priority</th>
+      <th>Video / server / fit</th><th>Est. value</th><th>Detail</th>
+    </tr></thead>
+    <tbody>${rows.map((r, i) => `<tr class="${r.deviceOnly ? "dev-only" : ""}">
+      <td class="mono">${r.ref}${r.deviceOnly ? "<br><small>⚠ device only</small>" : ""}<br><small>${r.surveyor}</small></td>
+      <td><b>${r.company}</b><br><small>${r.location}</small><br><small>${r.phone}</small></td>
+      <td><small>${r.industry}</small></td>
+      <td class="mono">${r.date}</td>
+      <td>${dash(r.totalCams)} / ${dash(r.scopeCams)}</td>
+      <td><small>${r.signal}</small></td>
+      <td><small>${r.rtsp}</small></td>
+      <td><small>${r.serverRoom}</small></td>
+      <td><small>${r.existingServer}</small></td>
+      <td><small>${r.gpu}</small></td>
+      <td><small>${r.willing}</small></td>
+      <td><small>${r.budget}</small></td>
+      <td>${r.minAcc != null ? r.minAcc + "%" : "—"}</td>
+      <td><small>${r.pilot}</small></td>
+      <td><small>${r.payModel}</small></td>
+      <td>${pill(r.intent)}</td>
+      <td><small>${r.priority}</small></td>
+      <td>${pill(r.videoScore)} ${pill(r.serverScore)} ${pill(r.fitScore)}</td>
+      <td>${money(r.projValue)}</td>
+      <td><details class="sub-detail"><summary>view</summary>
+        <pre class="json">${JSON.stringify(r.payload, null, 2).replace(/</g, "&lt;")}</pre>
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn-mini" data-copy="${i}">Copy JSON</button>
+          <button class="btn-mini" data-dl="${i}">Download JSON</button>
+          <button class="btn-mini" data-del="${i}">Delete</button>
+        </div></details></td>
+    </tr>`).join("")}</tbody></table>`;
+
+  $$("[data-copy]").forEach((b) => b.onclick = () => {
+    navigator.clipboard.writeText(JSON.stringify(rows[+b.dataset.copy].payload, null, 2)).then(() => toast("JSON copied"));
+  });
+  $$("[data-dl]").forEach((b) => b.onclick = () => {
+    const r = rows[+b.dataset.dl];
+    dl(`${r.ref}.json`, JSON.stringify(r.payload, null, 2));
+  });
+  $$("[data-del]").forEach((b) => b.onclick = async () => {
+    const r = rows[+b.dataset.del];
+    if (!confirm(`Delete survey ${r.ref} permanently?`)) return;
+    if (SERVER && !r.deviceOnly) {
+      await fetch("api/responses/" + r.id, { method: "DELETE" });
+    } else {
+      localSubsSave(localSubs().filter((x) => x.ref !== r.ref));
+    }
+    load();
+  });
+}
+
+/* --------------------------- import / upload ---------------------------- */
+$("#btn-import").onchange = (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = "";
+  if (!files.length) return;
+  let added = 0, updated = 0;
+  Promise.all(files.map((f) => f.text())).then((texts) => {
+    const list = localSubs();
+    texts.forEach((t) => {
+      let p;
+      try { p = JSON.parse(t); } catch (err) { toast("Skipped a file that is not valid JSON.", "err"); return; }
+      const ref = p.meta?.ref || "SUR-imported-" + Date.now();
+      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+      const i = list.findIndex((x) => x.ref === ref);
+      const rec = {
+        id: i >= 0 ? list[i].id : Date.now() + Math.floor(Math.random() * 1000),
+        ref,
+        company: p.meta?.company || p.respondent?.company_name || "",
+        site: p.respondent?.plant_location || "",
+        payload: p, created_at: p.meta?.saved_at ? p.meta.saved_at.replace("T", " ").slice(0, 19) : now,
+        device_only: true,
+      };
+      if (i >= 0) { list[i] = rec; updated++; } else { list.push(rec); added++; }
+    });
+    localSubsSave(list);
+    toast(`Imported: ${added} new, ${updated} updated.`, "ok");
+    load();
+  });
+};
+
+$("#btn-upload").onclick = async () => {
+  const pending = localSubs();
+  if (!pending.length) { toast("No device records to upload."); return; }
+  let ok = 0, fail = 0;
+  for (const rec of pending) {
+    try {
+      const res = await fetch("api/responses", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rec.payload),
+      });
+      const d = await res.json();
+      if (res.ok && d.ok) ok++; else fail++;
+    } catch (e) { fail++; }
+  }
+  if (ok && !fail) localSubsSave([]);
+  toast(`Uploaded ${ok} record(s)${fail ? `, ${fail} failed (kept on device)` : ""}.`, ok ? "ok" : "err");
+  load();
+};
+
+/* --------------------------------- load --------------------------------- */
+async function load() {
+  if (SERVER === null) await probe();
+  let rows = [];
+  if (SERVER) {
+    try {
+      const res = await fetch("api/responses");
+      const text = await res.text();
+      rows = JSON.parse(text).map((r) => ({ ...r, device_only: false }));
+    } catch (e) { /* fall through to local */ }
+  }
+  // merge device-only records that the server does not have
+  const seen = new Set(rows.map((r) => r.ref));
+  localSubs().forEach((r) => { if (!seen.has(r.ref)) rows.push(r); });
+  ROWS = rows.map(summarise);
+  renderStats(); renderTable();
+  const devOnly = localSubs().filter((r) => !(!SERVER) || true).length;
+  $("#btn-upload").style.display = (SERVER && localSubs().length) ? "" : "none";
+}
+
+async function probe() {
+  try {
+    const res = await fetch("api/health", { cache: "no-store" });
+    const d = await res.json();
+    SERVER = !!(res.ok && d && d.ok);
+  } catch (e) { SERVER = false; }
+  const pillEl = $("#mode-pill");
+  pillEl.className = "mode-pill " + (SERVER ? "srv" : "dev");
+  pillEl.textContent = SERVER ? "SERVER MODE" : "DEVICE MODE";
+  $("#mode-note").innerHTML = SERVER
+    ? "Connected to the survey server - submissions are shared across devices. Device-only imports are merged below and can be uploaded."
+    : "No survey server on this host (GitHub Pages / static hosting). Submissions live <b>in this browser</b>; export CSV/JSON here, or import JSON files collected on field devices.";
+}
+
+$("#btn-csv").onclick = () => {
+  if (SERVER && !localSubs().length) { window.location.href = "api/export.csv"; return; }
+  exportCSV(ROWS);
+  toast("CSV exported from " + ROWS.length + " record(s).", "ok");
+};
+$("#q").oninput = renderTable;
+$("#sort").onchange = renderTable;
+$("#btn-refresh").onclick = load;
+load();
+</script>
+</body>
+</html>

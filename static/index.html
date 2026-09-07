@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1626">
+<title>Industrial Site Survey — AI PPE Detection</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<button class="menu-btn" id="menu-btn">☰ Sections</button>
+
+<div class="app">
+  <!-- ======================= sidebar ======================= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">AI PPE Detection</div>
+        <div class="brand-sub">Industrial site survey · v1.0</div>
+      </div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Progress</span><span id="progress-pct">0% complete</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <ul class="nav" id="nav"></ul>
+
+    <div class="sidebar-footer">
+      Drafts auto-save on this device.<br>
+      <a href="submissions.html" target="_blank">Submitted surveys (<span id="sub-count">0</span>)</a><br>
+      <a href="checklist.html" target="_blank">Printable field checklist</a>
+      <div id="mode-badge" style="margin-top:8px;color:#9fb1cd">Checking storage…</div>
+    </div>
+  </aside>
+
+  <!-- ======================= main ======================= -->
+  <main class="main">
+    <div class="main-inner">
+
+      <div class="topbar">
+        <div>
+          <h1>Industrial site survey — camera, server &amp; commercial assessment</h1>
+          <p>Complete all 11 sections on site. Grey guidance notes tell you what to ask and why.
+             Fields marked <span style="color:#c2352b;font-weight:700">*</span> are required.
+             Keyboard: <b>Alt + ←/→</b> moves between sections.</p>
+        </div>
+        <div class="save-state" id="save-state"><span class="dot idle" id="save-dot"></span><span id="save-text">Not saved yet</span></div>
+      </div>
+
+      <div class="callout">
+        <b>Our position to state clearly on every visit:</b> the current PPE detection model runs at
+        <b>≈ 85% accuracy</b> in testing. Real-world accuracy depends on camera resolution, mounting height,
+        angle, lighting and occlusion — which is exactly what Section 04 measures. Site-specific fine-tuning
+        with the customer's own footage is what pushes accuracy up, so always ask for recorded footage
+        (Section 08) and a pilot (Sections 08 &amp; 10).
+      </div>
+
+      <div id="sections"></div>
+
+      <div class="footnav">
+        <button type="button" class="btn btn-ghost" id="btn-prev">← Previous</button>
+        <button type="button" class="btn btn-primary" id="btn-next">Next section →</button>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="schema.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

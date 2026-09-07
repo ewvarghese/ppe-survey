@@ -1,0 +1,21 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# survey data - never commit respondent data
+surveys.db
+*.db-journal
+
+# test artefacts
+_mobile.png
+_desktop.png
+_review.png
+_dashboard.png
+.playwright/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
