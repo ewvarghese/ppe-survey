@@ -31,6 +31,7 @@ and can upload them to the server when one is reachable.
    folder to **GitHub Pages** automatically (Settings → Pages will show
    "GitHub Actions" as the source after the first run).
 4. Open `https://<your-org>.github.io/<your-repo>/` on any phone or laptop.
+   This project is live at **https://ewvarghese.github.io/ppe-survey/**
 
 In Pages mode every submission is stored in that browser only — perfect for
 field work with no infrastructure. Back at the office: open the dashboard on
@@ -126,4 +127,5 @@ pip install playwright && playwright install chromium
 python3 test_e2e.py        # 36 checks against the Flask server mode
 python3 test_static.py     # 8 checks against a plain static file server
                            # (exactly what GitHub Pages provides)
+python3 test_live.py       # same 8 checks against the deployed Pages site
 ```
