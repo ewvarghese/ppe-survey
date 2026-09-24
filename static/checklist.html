@@ -1,127 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Field checklist — AI PPE site survey</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>20-question field checklist — AI PPE Detection</title>
+<link rel="stylesheet" href="style.css?v=2">
 <style>
-  .wrap { max-width: 860px; margin: 0 auto; padding: 26px 20px 70px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--ink-soft); font-size: 13.5px; margin-bottom: 20px; }
-  .blk { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-         box-shadow: var(--shadow); padding: 16px 20px; margin-bottom: 14px; }
-  .blk h2 { font-size: 14.5px; margin: 0 0 10px; display: flex; gap: 8px; align-items: center; }
-  .blk h2 .n { background: var(--brand); color: #fff; width: 22px; height: 22px; border-radius: 6px;
-               display: grid; place-items: center; font-size: 11.5px; flex: 0 0 22px; }
-  ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
-  li { margin-bottom: 5px; }
-  li b { color: var(--ink); }
-  .say { background: var(--brand-soft); border-left: 3px solid var(--brand); padding: 10px 12px;
-         border-radius: 0 8px 8px 0; font-size: 13px; color: #173a72; margin: 10px 0 4px; }
-  .warn { background: var(--warn-bg); border-left: 3px solid #d99a1f; color: var(--warn-ink);
-          padding: 10px 12px; border-radius: 0 8px 8px 0; font-size: 13px; margin: 10px 0 4px; }
-  .tools { font-size: 12.5px; color: var(--ink-soft); }
-  .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-  @media print { .blk { box-shadow: none; break-inside: avoid; } .top .btn-row { display: none; } }
+.wrap { max-width: 850px; margin: auto; padding: 28px 22px 60px; }
+h1 { font-size: 25px; margin: 8px 0; letter-spacing: -.5px; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sub { color: var(--ink-soft); font-size: 13px; }
+.block { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; margin-top: 20px; }
+h2 { font-size: 16px; margin: 0 0 14px; }
+.item { padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.item:last-child { border: 0; }
+.item b { font-size: 14px; }
+.item p { font-size: 12px; color: var(--ink-soft); margin: 5px 0; }
+.write-line { display: none; }
+@media print {
+  .wrap { padding: 0; } .block { break-inside: auto; margin-top: 12px; padding: 10px 14px; }
+  .item { break-inside: avoid; }
+  .write-line { display: block; height: 20px; border-bottom: 1px dotted #b2bbca; }
+  .top .btn-row { display: none; }
+}
 </style>
 </head>
-<body>
-<div class="wrap">
-  <div class="top">
-    <div>
-      <h1>Field checklist — AI PPE detection site survey</h1>
-      <div class="sub">Print this or keep it open on your phone. Tick items in the web form as you go.</div>
-    </div>
-    <div class="btn-row">
-      <a class="btn btn-ghost" href="index.html">Open form</a>
-      <button class="btn btn-primary" onclick="window.print()">Print</button>
-    </div>
-  </div>
-
-  <div class="blk"><h2><span class="n">A</span>Carry on site</h2>
-    <ul class="tools">
-      <li>Phone with camera + this checklist; power bank</li>
-      <li>Torch (for dark bays), laser/tape measure (mounting heights & distances)</li>
-      <li>Laptop with VLC (to open an RTSP test stream) and a PoE/cable tester if available</li>
-      <li>PPE for yourself: helmet, shoes, vest, goggles — you will be asked to wear them</li>
-      <li>Blank visitor/NDA forms; company profile one-pager to leave behind</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">1</span>Open the meeting right</h2>
-    <ul>
-      <li>Confirm who decides: <b>safety head vs plant head vs IT vs purchase</b> — get the real decision maker's name even if not in the room.</li>
-      <li>Ask their pain first, say nothing about price: <i>"Walk me through your last PPE-related incident or notice."</i></li>
-      <li>Count people: employees, contract workers, max per shift.</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">2</span>State our accuracy honestly — early</h2>
-    <div class="say"><b>Say this:</b> "Our model detects PPE violations at about <b>85% accuracy</b> in testing. On your site the number depends on your cameras — which is what we're measuring today — and we improve it by training on your own footage during a pilot."</div>
-    <ul>
-      <li>Then ask: <i>"What accuracy would you need to act on an alert?"</i> → record their minimum (section 08).</li>
-      <li>Ask about false alarms separately: <i>"How many wrong alerts per shift would make your team ignore the system?"</i></li>
-      <li>Never promise 95%+ on day one. Promise a pilot with a written success criterion instead.</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">3</span>Walk every zone you will monitor</h2>
-    <ul>
-      <li>For each zone: <b>photograph the live camera view</b> (screen photo of the monitor is fine) + one wide shot of the area.</li>
-      <li>Note: mounting height, distance to workers, tilt angle, lighting at that hour, glare, dust/steam.</li>
-      <li>Check occlusion: can you see a worker's <b>full body</b>, or only head/shoulders behind machines? Head-only frames kill shoe & vest detection.</li>
-      <li>Check night-shift lighting in the same spot if the visit is in daytime — ask for a night photo from the NVR.</li>
-      <li>Mark blind spots where a <b>new camera</b> would be needed; estimate count (section 11).</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">4</span>CCTV room / NVR — 10 minutes that decide the project</h2>
-    <ul>
-      <li>Photograph the NVR/DVR label: make, model, channel count.</li>
-      <li>Open the camera list: note IP vs analogue per camera, resolution & FPS as configured.</li>
-      <li>Open one live view at full screen — judge sharpness yourself (section 04 rating).</li>
-      <li>Ask for RTSP/ONVIF access and who in IT can grant it.</li>
-      <li>Retention days and free disk space.</li>
-    </ul>
-    <div class="warn">Analogue/DVR site? Don't reject it: an <b>encoder</b> or camera replacement is the standard fix — capture it in section 04 and price it later.</div>
-  </div>
-
-  <div class="blk"><h2><span class="n">5</span>Server room — photograph, don't guess</h2>
-    <ul>
-      <li>Photos: rack front, free U-space, UPS, AC unit, the server's back panel.</li>
-      <li>Server label: make/model, CPU, RAM; open OS and read version if allowed.</li>
-      <li>GPU: run <code>nvidia-smi</code> if a GPU exists — screenshot it. No GPU is fine, it just means new hardware.</li>
-      <li>Power point + cooling near the rack; free PCIe slot if a GPU card is the plan.</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">6</span>The money questions (section 07 & 10)</h2>
-    <ul>
-      <li><i>"If we prove this works on your cameras, how would you prefer to buy it — one-time purchase, or monthly?"</i></li>
-      <li><i>"Would a new server be part of your budget, or should we fit inside what you already have?"</i> → captures willingness to invest without quoting a price.</li>
-      <li>Ask the budget band <b>after</b> they answer, not before.</li>
-      <li>Approval route & timeline; tender or direct purchase; who else is quoting.</li>
-      <li>ROI in their words: cost of one accident, penalty history, audit pressure, customer demands.</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">7</span>Close with a dated next step</h2>
-    <ul>
-      <li>Agree one next step <b>with a date</b>: demo / footage test / technical audit / quotation.</li>
-      <li>Ask for recorded footage (even 2 hours from 2 cameras) — it is your fastest accuracy proof.</li>
-      <li>Get consent: site photos, technical audit visit, footage test.</li>
-      <li>Before leaving the gate: submit the form, or at least download the JSON copy.</li>
-    </ul>
-  </div>
-
-  <div class="blk"><h2><span class="n">8</span>Score it honestly (section 11)</h2>
-    <ul>
-      <li>Video quality: can YOU see helmet + shoes + vest clearly in the live view? If not, score ≤ 5 and recommend camera fixes.</li>
-      <li>Server readiness: no rack/power/cooling = low score, edge box may be the answer.</li>
-      <li>Buying intent 0–10: would they sign this month? If not, say why in obstacles.</li>
-    </ul>
-  </div>
+<body><div class="wrap">
+<div class="top"><div><div class="eyebrow">FIELD COPY · THE SAME 20 QUESTIONS</div><h1>PPE site survey checklist</h1></div>
+<div class="btn-row"><a class="btn btn-ghost" href="index.html">Open form</a><button class="btn btn-primary" onclick="window.print()">Print</button></div></div>
+<p class="sub">Short answers are enough. “Not sure” is fine. Use the web form for auto-save, optional technical notes and photo attachments.</p>
+<div class="callout"><b>Before the visit:</b> carry a charged phone and the required PPE. Get permission before taking photos. Do not record passwords or other access credentials.</div>
+<div class="callout warn"><b>Be clear about accuracy:</b> the current reported figure is about 85%. Site results may differ. Agree on a pilot test; do not promise an improvement or replace normal safety checks.</div>
+<div id="questions"></div>
+<div class="callout" style="margin-top:20px"><b>Before leaving:</b> review the answers and agree on a next action, owner and date. Submit, then open <a href="submissions.html">Submitted surveys</a> in the same browser. Export CSV or back up JSON with photos. GitHub Pages does not collect records into a central database.</div>
 </div>
-</body>
-</html>
+<script src="schema.js?v=2"></script>
+<script>
+const root = document.getElementById('questions');
+for (const sec of window.SURVEY_SCHEMA.sections) {
+  if (sec.special) continue;
+  const block = document.createElement('section'); block.className = 'block';
+  const h = document.createElement('h2'); h.textContent = sec.title; block.appendChild(h);
+  for (const f of sec.fields) {
+    const item = document.createElement('div'); item.className = 'item';
+    const label = document.createElement('b'); label.textContent = f.n + '. ' + f.l; item.appendChild(label);
+    const p = document.createElement('p');
+    p.textContent = f.hint || (f.o ? f.o.map(o => typeof o === 'string' ? o : o.label).join(' / ') : f.ph || '');
+    item.appendChild(p);
+    const line = document.createElement('div'); line.className = 'write-line'; item.appendChild(line);
+    block.appendChild(item);
+  }
+  root.appendChild(block);
+}
+</script>
+</body></html>

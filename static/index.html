@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1626">
-<title>Industrial Site Survey — AI PPE Detection</title>
-<link rel="stylesheet" href="style.css">
+<title>20-question site survey — AI PPE Detection</title>
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -22,12 +22,12 @@
       </div>
       <div>
         <div class="brand-name">AI PPE Detection</div>
-        <div class="brand-sub">Industrial site survey · v1.0</div>
+        <div class="brand-sub">Site survey · 20 questions · v2.0</div>
       </div>
     </div>
 
     <div class="progress-wrap">
-      <div class="progress-label"><span>Progress</span><span id="progress-pct">0% complete</span></div>
+      <div class="progress-label"><span>Progress</span><span id="progress-pct">0 / 20 answered</span></div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     </div>
 
@@ -47,20 +47,17 @@
 
       <div class="topbar">
         <div>
-          <h1>Industrial site survey — camera, server &amp; commercial assessment</h1>
-          <p>Complete all 11 sections on site. Grey guidance notes tell you what to ask and why.
-             Fields marked <span style="color:#c2352b;font-weight:700">*</span> are required.
-             Keyboard: <b>Alt + ←/→</b> moves between sections.</p>
+          <div class="eyebrow">20 QUESTIONS · 5 SHORT SECTIONS</div>
+          <h1>PPE site survey, made simple.</h1>
+          <p>Short answers are welcome. Choose “Not sure” or write it when you don’t know.
+             Technical notes and photos are optional. <span class="req">*</span> marks a key question.</p>
         </div>
         <div class="save-state" id="save-state"><span class="dot idle" id="save-dot"></span><span id="save-text">Not saved yet</span></div>
       </div>
 
-      <div class="callout">
-        <b>Our position to state clearly on every visit:</b> the current PPE detection model runs at
-        <b>≈ 85% accuracy</b> in testing. Real-world accuracy depends on camera resolution, mounting height,
-        angle, lighting and occlusion — which is exactly what Section 04 measures. Site-specific fine-tuning
-        with the customer's own footage is what pushes accuracy up, so always ask for recorded footage
-        (Section 08) and a pilot (Sections 08 &amp; 10).
+      <div class="intro-strip">
+        <span>Current reported accuracy: <b>about 85%</b>. A pilot must check results on your site.</span>
+        <a href="submissions.html">View output data ↗</a>
       </div>
 
       <div id="sections"></div>
@@ -76,7 +73,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="schema.js"></script>
-<script src="app.js"></script>
+<script src="schema.js?v=2"></script>
+<script src="data.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

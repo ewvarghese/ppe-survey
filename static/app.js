@@ -45,12 +45,13 @@
     const d = new Date();
     const pad = (n) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-    return `SUR-${stamp}-${String(localSubs().length + 1).padStart(3, "0")}`;
+    const suffix = globalThis.crypto?.randomUUID?.().slice(0, 8) || Math.random().toString(36).slice(2, 10);
+    return `SUR-${stamp}-${suffix}`;
   }
 
   async function probeServer() {
     try {
-      const res = await fetch("api/health", { cache: "no-store" });
+      const res = await fetch("api/health", { cache: "no-store", signal: AbortSignal.timeout(5000) });
       const data = await res.json();
       serverMode = !!(res.ok && data && data.ok);
     } catch (e) { serverMode = false; }
@@ -64,7 +65,11 @@
     if (serverMode === null) { el.textContent = "Checking storage…"; return; }
     el.innerHTML = serverMode
       ? `Storage: <b>survey server</b> (shared across devices)`
-      : `Storage: <b>this device only</b> (static / offline mode) - export a JSON copy to sync`;
+      : `Storage: <b>this device only</b> — export CSV or JSON from this browser`;
+    const note = $("#review-storage");
+    if (note) note.innerHTML = serverMode
+      ? 'Submitting saves to the <b>shared survey server</b>. You can also download a JSON backup.'
+      : 'Submitting saves <b>only in this browser</b>, not in GitHub. Open <a href="submissions.html">Submitted surveys</a> here to export CSV or JSON. Back up before clearing browser data.';
   }
 
   /* ------------------------------- state ------------------------------- */
@@ -73,7 +78,9 @@
   let submittedRef = null;
 
   function blankState() {
-    const s = { meta: {} };
+    const d = new Date();
+    const surveyDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const s = { meta: { form_version: SCHEMA.version, survey_date: surveyDate } };
     SCHEMA.sections.forEach((sec) => {
       if (sec.special) return;
       s[sec.id] = {};
@@ -81,6 +88,8 @@
         if (f.t === "repeater") s[sec.id][f.k] = [];
         else if (f.t === "checks" || f.t === "photo") s[sec.id][f.k] = [];
         else s[sec.id][f.k] = "";
+        if (f.note) s[sec.id][f.k + "_notes"] = "";
+        if (f.photos) s[sec.id][f.photos.k] = [];
       });
     });
     return s;
@@ -112,7 +121,7 @@
     return path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), state);
   }
   function isEmpty(v) {
-    return v === "" || v === null || v === undefined || (Array.isArray(v) && v.length === 0);
+    return v === null || v === undefined || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0);
   }
   function optLabel(o) {
     if (o == null) return "";
@@ -213,9 +222,10 @@
     const wrap = document.createElement("div");
     wrap.className = "field" + (f.span === 2 ? " span-2" : "");
     wrap.dataset.path = f.k;
+    if (f.n) { wrap.classList.add("question"); wrap.dataset.question = f.n; wrap.id = "question-" + f.n; }
     if (f.span !== 2 && f.t !== "repeater") wrap.style.gridColumn = "auto";
 
-    const labelHtml = `<label class="lbl">${esc(f.l)}${f.r ? '<span class="req">*</span>' : ""}
+    const labelHtml = `<label class="lbl">${f.n ? `<span class="question-number">${f.n}</span>` : ""}${esc(f.l)}${f.r ? '<span class="req">*</span>' : ""}
         ${f.unit ? `<span class="unit">(${esc(f.unit)})</span>` : ""}</label>`;
 
     if (f.t === "repeater") {
@@ -264,7 +274,7 @@
 
     switch (f.t) {
       case "textarea":
-        control = `<textarea name="${esc(nameAttr)}" rows="3" placeholder="${esc(f.ph || "")}"></textarea>`;
+        control = `<textarea name="${esc(nameAttr)}" rows="${f.rows || 3}" placeholder="${esc(f.ph || "")}"></textarea>`;
         break;
       case "select": {
         const opts = (f.o || []).map((o, i) =>
@@ -309,6 +319,21 @@
 
     wrap.innerHTML = labelHtml + control + (f.hint ? `<div class="hint">${esc(f.hint)}</div>` : "");
 
+    const mainLabel = $(".lbl", wrap);
+    const controlId = "answer-" + nameAttr.replace(/[^a-z0-9_-]/gi, "-");
+    mainLabel.id = controlId + "-label";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-labelledby", mainLabel.id);
+    if (!["choice", "checks", "photo"].includes(f.t)) {
+      const input = $("input, select, textarea", wrap);
+      if (input) { input.id = controlId; mainLabel.htmlFor = controlId; }
+    }
+    const hint = $(".hint", wrap);
+    if (hint) {
+      hint.id = controlId + "-hint";
+      $$("input, select, textarea", wrap).forEach((el) => el.setAttribute("aria-describedby", hint.id));
+    }
+
     /* ---- value binding ---- */
     const getVal = () => repKey ? (state[secId][repKey][repIdx] || {})[f.k] : state[secId][f.k];
     const setVal = (v) => {
@@ -324,9 +349,9 @@
         (getVal() || []).forEach((src, i) => {
           const d = document.createElement("div");
           d.className = "thumb";
-          d.innerHTML = `<img src="${src}" alt="photo ${i + 1}"><button type="button" title="Remove">×</button>`;
+          d.innerHTML = `<img src="${esc(src)}" alt="photo ${i + 1}"><button type="button" title="Remove">×</button>`;
           d.querySelector("button").addEventListener("click", () => {
-            const arr = getVal(); arr.splice(i, 1); setVal(arr); drawThumbs(); save();
+            const arr = getVal(); arr.splice(i, 1); setVal(arr); drawThumbs(); save(); updateProgress();
           });
           thumbs.appendChild(d);
         });
@@ -336,9 +361,11 @@
         const arr = getVal() || [];
         for (const file of files) {
           if (arr.length >= (f.max || 4)) { toast(`Maximum ${f.max} photos here.`, "err"); break; }
-          arr.push(await compressImage(file));
+          if (!file.type.startsWith("image/")) continue;
+          const image = await compressImage(file);
+          if (image) arr.push(image);
         }
-        setVal(arr); drawThumbs(); save(); e.target.value = "";
+        setVal(arr); drawThumbs(); save(); updateProgress(); e.target.value = "";
       });
       drawThumbs();
     } else if (f.t === "checks") {
@@ -346,9 +373,13 @@
         const arr = getVal() || [];
         cb.checked = arr.includes(cb.value);
         cb.addEventListener("change", () => {
-          const a = getVal() || [];
-          if (cb.checked && !a.includes(cb.value)) a.push(cb.value);
-          if (!cb.checked) setVal(a.filter((x) => x !== cb.value)); else setVal(a);
+          let a = getVal() || [];
+          if (cb.checked) {
+            a = (f.exclusive || []).includes(cb.value) ? [cb.value]
+              : [...a.filter((x) => !(f.exclusive || []).includes(x) && x !== cb.value), cb.value];
+          } else a = a.filter((x) => x !== cb.value);
+          setVal(a);
+          $$("input[type=checkbox]", wrap).forEach((el) => { el.checked = a.includes(el.value); });
           save(); updateProgress();
         });
       });
@@ -374,13 +405,38 @@
       r.addEventListener("change", () => { setVal(Number(r.value)); show(r.value); save(); updateProgress(); });
     } else if (f.t === "select") {
       const s = $("select", wrap);
-      s.value = getVal() || "";
+      const existing = getVal();
+      if (!isEmpty(existing) && !Array.from(s.options).some((o) => o.value === String(existing))) {
+        const opt = document.createElement("option"); opt.value = existing; opt.textContent = existing + " (earlier answer)"; s.appendChild(opt);
+      }
+      s.value = existing || "";
       s.addEventListener("change", () => { setVal(s.value); save(); applyVisibility(); updateProgress(); });
     } else {
       const inp = $("input, textarea", wrap);
-      inp.value = getVal() || "";
+      inp.value = getVal() ?? "";
       inp.addEventListener("input", () => { setVal(inp.value); save(); updateProgress(); });
       inp.addEventListener("change", () => { applyVisibility(); });
+    }
+    // Optional notes belong to the same answer: no nested questionnaire.
+    if (f.note) {
+      const details = document.createElement("details");
+      details.className = "answer-note";
+      details.open = !isEmpty(state[secId][f.k + "_notes"]);
+      details.innerHTML = `<summary>${esc(f.note)}</summary>`;
+      if (f.help) details.innerHTML += `<p class="detail-help">${esc(f.help)}</p>`;
+      details.appendChild(buildField({ k: f.k + "_notes", t: "textarea", l: "Optional note", ph: f.notePh || "", span: 2 }, secId));
+      wrap.appendChild(details);
+    } else if (f.help) {
+      const help = document.createElement("details"); help.className = "tech-tip";
+      help.innerHTML = `<summary>Details to note if known</summary><p class="detail-help">${esc(f.help)}</p>`;
+      wrap.appendChild(help);
+    }
+    if (f.photos) {
+      const details = document.createElement("details"); details.className = "answer-note";
+      details.open = !isEmpty(state[secId][f.photos.k]);
+      details.innerHTML = `<summary>Add site photos (optional)</summary>`;
+      details.appendChild(buildField({ ...f.photos, t: "photo", span: 2 }, secId));
+      wrap.appendChild(details);
     }
     return wrap;
   }
@@ -408,7 +464,7 @@
           c.getContext("2d").drawImage(img, 0, 0, width, height);
           resolve(c.toDataURL("image/jpeg", quality));
         };
-        img.onerror = () => resolve(reader.result);
+        img.onerror = () => resolve("");
         img.src = reader.result;
       };
       reader.onerror = () => resolve("");
@@ -460,7 +516,7 @@
       }
       total++;
       const v = state[sec.id][f.k];
-      if (!isEmpty(v)) filled++;
+      if (!isEmpty(v) || (f.note && !isEmpty(state[sec.id][f.k + "_notes"])) || (f.photos && !isEmpty(state[sec.id][f.photos.k]))) filled++;
       if (f.r && isEmpty(v)) requiredLeft++;
     });
     return { filled, total, requiredLeft };
@@ -477,13 +533,13 @@
       const cnt = $(".nav-count", b);
       if (sec.special) { cnt.textContent = ""; return; }
       const pct = s.total ? Math.round((s.filled / s.total) * 100) : 0;
-      cnt.textContent = pct + "%";
-      b.classList.toggle("done", pct >= 85 && s.requiredLeft === 0);
+      cnt.textContent = `${s.filled}/${s.total}`;
+      b.classList.toggle("done", pct === 100 && s.requiredLeft === 0);
       if (s.requiredLeft > 0) cnt.style.color = "#ffb4ad"; else cnt.style.color = "";
     });
     const overall = totalAll ? Math.round((filledAll / totalAll) * 100) : 0;
     $("#progress-fill").style.width = overall + "%";
-    $("#progress-pct").textContent = overall + "% complete";
+    $("#progress-pct").textContent = `${filledAll} / ${totalAll} answered`;
   }
 
   /* ------------------------------ review ------------------------------- */
@@ -502,10 +558,7 @@
         <button type="button" class="btn btn-ghost" id="btn-print">Print / save PDF</button>
         <button type="button" class="btn btn-ghost" id="btn-new">Start a new blank survey</button>
       </div>
-      <div class="callout ok" style="margin-top:14px">
-        Submitting stores this survey on the survey server and gives you a <b>reference ID</b>.
-        If you have no internet at the site, use <b>Download JSON copy</b> - the file can be imported later.
-      </div>
+      <div class="callout" id="review-storage" style="margin-top:14px">Checking storage…</div>
       <div class="btn-row" style="margin-top:14px">
         <button type="button" class="btn btn-ok" id="btn-submit">Submit survey</button>
         <label class="btn btn-ghost" style="cursor:pointer">Import a saved JSON
@@ -517,6 +570,7 @@
   function renderReview() {
     const body = $("#review-body");
     if (!body) return;
+    updateModeBadge();
     body.innerHTML = "";
     let missingTotal = 0;
     const missingHtml = [];
@@ -528,7 +582,7 @@
         missingTotal += st.requiredLeft;
         sec.fields.forEach((f) => {
           if (!fieldVisible(f)) return;
-          if (f.r && isEmpty(state[sec.id][f.k])) missingHtml.push(`<li>Section ${i + 1} — <b>${esc(f.l)}</b></li>`);
+          if (f.r && isEmpty(state[sec.id][f.k])) missingHtml.push(`<li>Question ${f.n} — <b>${esc(f.l)}</b></li>`);
           if (f.t === "repeater") (state[sec.id][f.k] || []).forEach((item, ri) => {
             f.fields.forEach((sf) => { if (sf.r && isEmpty(item[sf.k])) missingHtml.push(`<li>Section ${i + 1}, entry ${ri + 1} — <b>${esc(sf.l)}</b></li>`); });
           });
@@ -544,6 +598,11 @@
       body.appendChild(div);
     });
 
+    if (state.meta?.migrated_from) {
+      const notice = document.createElement("div"); notice.className = "callout";
+      notice.textContent = "Earlier detailed answers are preserved. The short form shows summaries; the JSON copy and CSV export also keep the original fields and photos.";
+      body.prepend(notice);
+    }
     $("#missing").innerHTML = missingTotal
       ? `<div class="callout warn"><b>${missingTotal} required field(s) still empty:</b><ul>${missingHtml.join("")}</ul></div>`
       : `<div class="callout ok"><b>All required fields are complete.</b> Ready to submit.</div>`;
@@ -555,7 +614,7 @@
       if (isEmpty(v)) return;
       if (Array.isArray(v) && typeof v[0] === "string" && v[0].startsWith("data:image")) {
         rows.push(`<div class="rev-row"><div class="rev-k">${esc(k)}</div><div class="rev-v">
-          <span class="thumbs">${v.map((s) => `<span class="thumb"><img src="${s}"></span>`).join("")}</span></div></div>`);
+          <span class="thumbs">${v.map((s) => `<span class="thumb"><img src="${esc(s)}" alt="Site photo"></span>`).join("")}</span></div></div>`);
         return;
       }
       rows.push(`<div class="rev-row"><div class="rev-k">${esc(k)}</div>
@@ -572,7 +631,9 @@
         });
         return;
       }
-      push(f.l, state[sec.id][f.k]);
+      push(`${f.n}. ${f.l}`, window.SurveyData.answerLabel(f, state[sec.id][f.k]));
+      if (f.note) push(`Q${f.n} · Note`, state[sec.id][f.k + "_notes"]);
+      if (f.photos) push(`Q${f.n} · ${f.photos.l}`, state[sec.id][f.photos.k]);
     });
     return rows;
   }
@@ -586,7 +647,8 @@
     if (el) el.style.display = "";
     $$("#nav button").forEach((b, bi) => b.classList.toggle("active", bi === currentSection));
     $("#btn-prev").disabled = currentSection === 0;
-    $("#btn-next").textContent = currentSection === SCHEMA.sections.length - 1 ? "Finish" : "Next section →";
+    $("#btn-next").hidden = currentSection === SCHEMA.sections.length - 1;
+    $("#btn-next").textContent = currentSection === SCHEMA.sections.length - 2 ? "Review answers →" : "Next section →";
     if (active.special === "review") renderReview();
     if (!skipScroll) window.scrollTo({ top: 0, behavior: "smooth" });
     updateProgress();
@@ -605,11 +667,15 @@
   }
 
   function save() {
+    const btn = $("#btn-submit");
+    if (btn) { btn.disabled = false; btn.textContent = submittedRef ? "Update submitted survey" : "Submit survey"; }
     clearTimeout(saveTimer);
     setSaveIndicator("idle", "Saving…");
     saveTimer = setTimeout(() => {
       try {
+        state.meta.form_version = SCHEMA.version;
         localStorage.setItem(LS_KEY, JSON.stringify(state));
+        saveTimer = null;
         setSaveIndicator("", "Draft saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       } catch (e) {
         setSaveIndicator("idle", "Not saved (storage full) - download a JSON copy");
@@ -617,15 +683,23 @@
     }, 450);
   }
 
+  function hydrate(parsed) {
+    const upgraded = window.SurveyData.migrate(parsed);
+    const base = blankState();
+    for (const [key, value] of Object.entries(upgraded)) {
+      if (["__proto__", "constructor", "prototype"].includes(key)) continue;
+      if (value && typeof value === "object" && !Array.isArray(value)) base[key] = { ...(base[key] || {}), ...value };
+      else if (!(key in base)) base[key] = value;
+    }
+    return base;
+  }
+
   function loadDraft() {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return false;
-      const parsed = JSON.parse(raw);
-      const base = blankState();
-      Object.keys(base).forEach((k) => { if (parsed[k] && typeof parsed[k] === "object") base[k] = Object.assign(base[k], parsed[k]); });
-      base.meta = Object.assign(base.meta, parsed.meta || {});
-      state = base;
+      state = hydrate(JSON.parse(raw));
+      submittedRef = state.meta.ref || null;
       return true;
     } catch (e) { return false; }
   }
@@ -644,10 +718,12 @@
             return o;
           }).filter((o) => Object.keys(o).length);
         } else if (isEmpty(p[sec.id][f.k])) delete p[sec.id][f.k];
+        if (f.note && isEmpty(p[sec.id][f.k + "_notes"])) delete p[sec.id][f.k + "_notes"];
+        if (f.photos && isEmpty(p[sec.id][f.photos.k])) delete p[sec.id][f.photos.k];
       });
     });
     p.meta = Object.assign({}, p.meta, {
-      form_version: "1.0",
+      form_version: SCHEMA.version,
       ref: submittedRef || p.meta.ref || "",
       saved_at: new Date().toISOString(),
       surveyor: (state.respondent && state.respondent.surveyor_name) || "",
@@ -667,7 +743,9 @@
     const btn = $("#btn-submit");
     btn.disabled = true; btn.textContent = "Submitting…";
     const payload = buildPayload();
+    payload.meta.ref = payload.meta.ref || localRef();
     try {
+      if (serverMode === null) await probeServer();
       let ref;
       if (serverMode) {
         const data = await getJSON("api/responses", {
@@ -740,7 +818,7 @@
 
     submitBtn.onclick = submit;
     submitBtn.disabled = false;
-    submitBtn.textContent = submittedRef ? `Submitted ✓  ${submittedRef}` : "Submit survey";
+    submitBtn.textContent = submittedRef ? "Update submitted survey" : "Submit survey";
 
     $("#btn-download-json").onclick = () => {
       const company = ((state.respondent && state.respondent.company_name) || "site")
@@ -752,17 +830,20 @@
 
     $("#btn-print").onclick = () => {
       const before = currentSection;
-      $$(".section-card").forEach((c) => { c.style.display = ""; });
-      window.print();
-      goTo(before);
+      goTo(SCHEMA.sections.length - 1, true);
+      document.body.classList.add("printing-survey");
+      try { window.print(); }
+      finally { document.body.classList.remove("printing-survey"); goTo(before, true); }
     };
 
     $("#btn-new").onclick = () => {
       if (!confirm("Start a new blank survey? The current draft will be cleared (submit or download it first).")) return;
+      clearTimeout(saveTimer); saveTimer = null;
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_ID_KEY);
       state = blankState();
       submittedRef = null;
+      setSaveIndicator("idle", "New survey — not saved yet");
       render();
       goTo(0);
       toast("New blank survey started.");
@@ -775,13 +856,9 @@
       fr.onload = () => {
         try {
           const parsed = JSON.parse(fr.result);
-          const base = blankState();
-          Object.keys(base).forEach((k) => {
-            if (parsed[k] && typeof parsed[k] === "object") base[k] = Object.assign(base[k], parsed[k]);
-          });
-          base.meta = parsed.meta || {};
-          state = base;
-          submittedRef = base.meta.ref || null;
+          if (!window.SurveyData.valid(parsed)) throw new Error("Not a survey");
+          state = hydrate(parsed);
+          submittedRef = state.meta.ref || null;
           save(); render(); goTo(0); toast("JSON imported.");
         } catch (err) { toast("That file is not a valid survey JSON.", "err"); }
       };
@@ -833,7 +910,10 @@
   document.addEventListener("DOMContentLoaded", () => {
     const hadDraft = loadDraft();
     render();
-    if (hadDraft) toast("Draft restored from this device.");
+    if (hadDraft) {
+      toast(state.meta.migrated_from ? "Draft restored. Earlier detailed answers are preserved." : "Draft restored from this device.");
+      setSaveIndicator("", "Draft restored");
+    }
     probeServer().then(() => loadCount());
 
     $("#menu-btn").onclick = () => $("#sidebar").classList.toggle("open");
@@ -854,5 +934,12 @@
     }, true);
 
     loadCount();
+  });
+  // Flush a pending keystroke before navigation; debounce must not lose it.
+  window.addEventListener("pagehide", () => {
+    if (!saveTimer) return;
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (_) { /* a JSON copy remains available */ }
+    saveTimer = null;
   });
 })();

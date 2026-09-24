@@ -320,3 +320,45 @@ details.sub-detail summary { cursor: pointer; font-size: 12.5px; color: var(--br
   .field.hidden, .card.hidden { display: block !important; }
   input, select, textarea { border: 0; border-bottom: 1px solid #999; border-radius: 0; }
 }
+
+/* Short survey v2: numbered questions, with optional detail tucked away. */
+.eyebrow { color: var(--brand-dark); font-size: 11px; font-weight: 750; letter-spacing: 1.2px; margin-bottom: 7px; }
+.topbar h1 { font-size: 28px; letter-spacing: -.6px; margin-bottom: 8px; }
+.topbar p { max-width: 660px; line-height: 1.65; }
+.intro-strip { display: flex; gap: 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); margin: 0 0 22px; }
+.intro-strip a { color: var(--brand-dark); font-weight: 650; text-decoration: none; white-space: nowrap; }
+.question { border-bottom: 1px solid var(--line-soft); padding: 7px 0 23px; }
+.question:last-child { border-bottom: 0; padding-bottom: 0; }
+.question > label.lbl { font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
+.question-number { display: inline-flex; width: 25px; height: 25px; justify-content: center; align-items: center; background: var(--brand-soft); color: var(--brand-dark); border-radius: 7px; font-size: 12px; margin-right: 8px; vertical-align: middle; }
+.hint { color: #63748b; font-size: 12px; }
+.req { color: var(--danger); font-weight: 700; }
+.answer-note, .tech-tip { margin-top: 11px; font-size: 12px; }
+.answer-note summary, .tech-tip summary { color: var(--brand-dark); cursor: pointer; padding: 5px 0; }
+.answer-note[open] { background: #f7f9fd; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 9px; }
+.answer-note .field { margin-top: 7px; }
+.answer-note .lbl { font-size: 11px; color: var(--ink-soft); }
+.detail-help { margin: 6px 0 10px; line-height: 1.65; color: var(--ink-soft); font-size: 12px; }
+.photo-drop { display: block; }
+.photo-drop:focus-within { outline: 2px solid var(--brand); }
+.rev-v { white-space: pre-wrap; }
+.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+[hidden] { display: none !important; }
+@media (max-width: 940px) {
+  .topbar h1 { font-size: 24px; }
+  .question > label.lbl { font-size: 15px; }
+  input[type=text], input[type=number], input[type=tel], input[type=email], input[type=date], select, textarea { font-size: 16px; }
+  .checks { grid-template-columns: 1fr 1fr; }
+  .check { align-items: flex-start; }
+  .check input { margin-top: 3px; }
+  .rev-sec > h3 { flex-wrap: wrap; gap: 5px; }
+}
+@media (max-width: 360px) { .checks { grid-template-columns: 1fr; } }
+@media print {
+  .intro-strip, #missing, #review-storage, .answer-note summary, .tech-tip { display: none !important; }
+  .printing-survey .topbar p, .printing-survey .eyebrow { display: none; }
+  .printing-survey .section-card:not(#sec-review) { display: none !important; }
+  .printing-survey #sec-review { display: block !important; border: 0; }
+  .card, .rev-sec { break-inside: auto; page-break-inside: auto; }
+  .rev-row { break-inside: avoid; }
+}

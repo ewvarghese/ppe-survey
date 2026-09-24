@@ -1,133 +1,193 @@
-# Industrial Site Survey — AI PPE Detection
+# AI PPE Detection — 20-question site survey
 
-A field-survey web app for pre-sales / technical site visits at factories.
-It captures **camera infrastructure, network & server readiness, willingness to
-invest in new hardware, and what the customer expects from the AI model**
-(current model accuracy: ~85%), then stores every survey and exports it to CSV.
+A short, mobile-friendly field survey for pre-sales visits. **Exactly 20 numbered
+questions in five sections**, followed by review and submit. Plain-language
+choices, short answers and “Not sure” responses replace the earlier long form.
+Optional notes keep technical detail available without a second questionnaire.
 
-**Runs in two modes, from the same code:**
+**Live form:** https://ewvarghese.github.io/ppe-survey/
 
-| Mode | How | Where submissions live |
+**Output data:** https://ewvarghese.github.io/ppe-survey/submissions.html
+
+**Printable checklist:** https://ewvarghese.github.io/ppe-survey/checklist.html
+
+## The 20 questions
+
+| Section | # | Question |
+|---|---:|---|
+| Site & PPE | 1 | Which company and site are you visiting? |
+| | 2 | Who did you meet? |
+| | 3 | What work happens here, and what is the main safety problem? |
+| | 4 | Which PPE should the AI check? |
+| Cameras & network | 5 | How many cameras cover the areas to monitor? |
+| | 6 | What cameras and recorder do you have? |
+| | 7 | Can the cameras clearly show workers and their PPE? |
+| | 8 | Can our system use the camera video? |
+| Computer & hardware | 9 | Is a spare server or computer available? |
+| | 10 | Where could the AI computer run? |
+| | 11 | Would you buy or rent extra AI hardware if needed? |
+| AI results & alerts | 12 | Have we explained the current 85% accuracy? |
+| | 13 | What accuracy and false alarms would you accept? |
+| | 14 | Would you try a pilot? |
+| | 15 | How should alerts and reports reach your team? |
+| Budget & next steps | 16 | How would you like to pay? |
+| | 17 | What budget is possible? |
+| | 18 | Who can approve this, and when? |
+| | 19 | What permission has the site given? |
+| | 20 | What should happen next? |
+
+The visit date is recorded automatically. Optional notes and photos belong to
+these answers; they do not open additional numbered questions or a long repeatable
+sub-form. Related details are captured in short summaries, **not as hundreds of
+separate mandatory metrics**.
+
+### Coverage retained
+
+- **People and safety:** company/site, contacts, surveyor, industry, workers,
+  shifts, current checks, incidents, hazards, audit requirements, PPE by zone,
+  other/future AI needs and business value.
+- **Cameras:** count in scope, total count in notes, IP/analogue, make/model,
+  resolution, frame rate, codec, lens/night vision, recorder/software
+  (DVR/NVR/VMS), storage/retention, per-zone observations, blind spots and upgrades.
+- **Network:** stream access (RTSP/ONVIF), IT contact, VLAN, bandwidth,
+  cabling/PoE, firewall and internet/cloud restrictions.
+- **Compute:** available server/PC/edge device, CPU/RAM/storage, GPU and memory,
+  OS, spare capacity, virtualisation/installation permissions, rack/power/UPS/
+  cooling, constraints, and willingness to buy/rent/reuse/cloud.
+- **AI and workflow:** current reported accuracy of about 85%, minimum acceptable
+  performance, false alarms and missed violations, alert delay, pilot acceptance,
+  scope and success criteria, alert recipients/actions, evidence, reports,
+  languages, user roles and integrations.
+- **Commercial:** CAPEX/OPEX, per-camera/lease options, first-year budget band,
+  hardware/monthly splits, funding, approvals, decision maker, timeline, tender,
+  competitors, ROI, rollout, service/SLA, maintenance, warranty and training.
+- **Close:** separate permissions for visits, photos, testing and model
+  improvement; privacy/data ownership restrictions; surveyor assessment,
+  recommended configuration, estimates, blockers, next action/owner/date and photos.
+
+Guidance is optional: answer only what is known. Requested PPE types/integrations
+are requirements to assess, not claims that the product supports all of them.
+The 85% figure is the supplied current accuracy context, **not a guaranteed
+site result or an assertion about recall**. A pilot needs agreed metrics and
+site-specific testing. Fine-tuning is not a guarantee of improvement; AI does
+not replace normal safety controls.
+
+## Features kept
+
+- Auto-saving drafts, restore after reload, 20-question progress, mobile and
+  keyboard navigation (`Alt + ←/→`).
+- Review, submit/update with reference ID, print/save PDF, JSON import/export.
+- Up to eight optional site photos in Q20; images are resized. Only attach
+  images with permission.
+- Dashboard with search/sort, readable answers/photos, delete, CSV export,
+  individual JSON download/copy, bulk JSON backup, multi-file/backup import,
+  and upload of device records to a reachable survey server.
+- Both static GitHub Pages and optional Flask/SQLite modes.
+- Earlier detailed submissions remain available. Opening an earlier draft
+  adds short-form summaries while preserving **all original fields and photos**
+  in its JSON/CSV. Viewing/importing old submissions does not rewrite them.
+
+## Where output data goes
+
+| Mode | How it runs | Storage |
 |---|---|---|
-| **GitHub Pages / any static host** | push this repo, Actions publishes `static/` | each device's browser (export/import JSON to sync) |
-| **Survey server** | `python3 app.py` on any VPS / office machine | shared SQLite DB + one-click CSV |
+| **GitHub Pages / static hosting** | Open the live link; no server needed | This browser only |
+| **Survey server** | Run `app.py` on a controlled host | Shared SQLite database on that host |
 
-The form probes `api/health` on load: if a survey server answers, it uses it;
-otherwise it silently switches to on-device storage. The dashboard shows
-**SERVER MODE** or **DEVICE MODE** accordingly, merges device-only imports,
-and can upload them to the server when one is reachable.
+The app probes relative `api/health`, then labels the storage mode. A missing
+endpoint on a static host is expected. No respondent data is sent to GitHub or
+committed to the repository. A different device/browser/origin will not have the
+same local records automatically.
 
----
+### GitHub Pages: get your data
 
-## Run it directly from GitHub (no server at all)
+On the **same device and browser** used to fill the form, open:
+https://ewvarghese.github.io/ppe-survey/submissions.html
 
-1. Create an empty repository on GitHub (no README needed).
-2. Push this folder:
-   ```bash
-   git remote add origin https://github.com/<your-org>/<your-repo>.git
-   git push -u origin main
-   ```
-3. The included workflow `.github/workflows/pages.yml` publishes the `static/
-   folder to **GitHub Pages** automatically (Settings → Pages will show
-   "GitHub Actions" as the source after the first run).
-4. Open `https://<your-org>.github.io/<your-repo>/` on any phone or laptop.
-   This project is live at **https://ewvarghese.github.io/ppe-survey/**
+- **Export CSV**: one row per survey, with all stored answers/notes, for Excel
+  or Sheets. Photos are represented by counts rather than embedded image data.
+- **Download JSON** in a row: that survey, including its reference and photos.
+- **Backup JSON**: every listed record and its photos in one file.
+- **Import JSON**: merge individual survey files or bulk backups. Existing
+  references are updated rather than duplicated.
 
-In Pages mode every submission is stored in that browser only — perfect for
-field work with no infrastructure. Back at the office: open the dashboard on
-the same device and **Export CSV**, or **Import JSON** files copied from
-surveyors' phones. If you later run `app.py` on a server, the dashboard's
-**Upload device records to server** button syncs everything up.
+Back up regularly. Clearing site data, private-browsing sessions or a device
+reset can remove local drafts/submissions. Browser storage is limited; if saving
+fails, keep a JSON copy. Once loaded, device-mode editing/submission needs no
+backend; a fresh page load while fully offline is not guaranteed.
 
-## Run the survey-server version
+### Server mode
 
 ```bash
-pip install flask
-python3 app.py            # serves on http://0.0.0.0:5000
+pip install -r requirements.txt
+python3 app.py  # http://0.0.0.0:5000
 ```
 
-Same repository, same UI — but now submissions from every device collect in
-`surveys.db` and `/api/export.csv` gives one flat row per survey.
-For a VPS: put it behind nginx/caddy with TLS, or run with
-`gunicorn -b 0.0.0.0:5000 app:app`.
-
-Open `http://localhost:5000` (or the preview URL). No build step, no internet
-needed at run time — the form works on a phone in a factory with patchy signal:
-drafts auto-save in the browser and can be exported as a JSON file and imported
-later on an office machine.
-
-| URL | What it is |
+| URL / file | Purpose |
 |---|---|
-| `/` (index.html) | The survey form (12 steps) |
-| `/submissions.html` | Dashboard of submitted surveys + CSV export |
-| `/api/responses` | JSON API (GET list, POST submit, DELETE by id) |
-| `/api/export.csv` | One flat CSV row per survey, for Excel / Sheets |
+| `/` | The 20-question form |
+| `/submissions.html` | Dashboard and exports |
+| `/api/responses` | JSON API; GET list, POST create/update |
+| `/api/responses/<id>` | DELETE record |
+| `/api/export.csv` | Server-side flat CSV |
+| `surveys.db` | SQLite database next to `app.py` (not tracked in Git) |
 
-Data lives in `surveys.db` (SQLite, next to `app.py`). Back it up by copying
-that file. Photos taken on site are embedded in each record (resized to
-~1100 px JPEG), so the DB grows by roughly 100–300 KB per photo.
+Import phone JSON files into the server-hosted dashboard, then choose
+**Upload device records to server**. Different origins do not share browser
+storage. Server records are upserted by reference; successfully uploaded local
+copies are removed, and failed uploads remain for retry.
 
----
+For deployment, use a production WSGI server and HTTPS, for example gunicorn
+behind Caddy/nginx. **This starter API has no authentication**: place it behind
+access controls before collecting sensitive information. Do not publicly expose
+an unauthenticated server containing site/contact data. Back up SQLite using its
+backup tools or a consistent copy while writes are stopped.
 
-## The 12 sections
+## Publish / update GitHub Pages
 
-1. **Respondent & company** – who you spoke to, who decides, contact details
-2. **Plant profile** – industry, shifts, headcount, hazards, site constraints
-3. **Safety & PPE context** – violations/month, accidents, standards, pain point
-4. **Camera infrastructure** – counts, IP vs analogue, resolution/FPS/codec,
-   lighting, RTSP access, plus a **per-zone camera profile** (up to 8 zones)
-   with photos of the live view
-5. **VMS, network & security** – NVR/VMS, retention, storage, VLAN, bandwidth,
-   cybersecurity policy
-6. **Existing server & compute** – server room (rack/power/cooling/UPS),
-   existing server spec (CPU, RAM, storage, **GPU**, OS, virtualisation)
-7. **New server & investment** – willing to buy / lease / edge / cloud / reuse,
-   budget band, who pays, mandatory IT requirements
-8. **Model & accuracy expectations** – states our 85% accuracy, captures their
-   minimum acceptable accuracy, false-alarm tolerance, alert latency, pilot
-   acceptance and success criteria
-9. **Alerts, workflow & integration** – channels, recipients, reports, evidence,
-   integrations
-10. **Commercial & pricing** – payment model, budget, approval route, tender,
-    competitors, timeline, ROI drivers, support SLA, objections, buying intent
-11. **Assessment & next steps** – your scores (video / server / network / fit),
-    priority, recommended configuration, estimated project value, consents
-12. **Review & submit** – full read-back, submit, print/PDF, JSON download/import
+This repository publishes **only `static/`** using
+`.github/workflows/pages.yml` on a push to `main`.
 
----
+For a new repository, enable **Settings → Pages → Source: GitHub Actions**
+before the initial deployment. Then:
 
-## How to edit the questions
-
-Everything is data in **`static/schema.js`**. Add a field like:
-
-```js
-{ k: "my_field", t: "select", l: "Question text", r: true,   // r = required
-  o: ["Option A", "Option B"],                               // or [{id, label, sub}]
-  span: 2,                                                   // full width
-  hint: "Grey guidance under the question",
-  showIf: { p: "server.has_server_room", in: ["yes", "partial"] } }  // conditional
+```bash
+git remote add origin https://github.com/<owner>/<repo>.git
+git push -u origin main
 ```
 
-Field types: `text`, `textarea`, `number` (with `unit`), `tel`, `email`,
-`date`, `time`, `select`, `choice` (radio pills), `checks` (multi-select),
-`range` (slider), `photo` (camera capture, stored in the record),
-`repeater` (repeatable sub-form — used for camera profiles).
+For this existing project, push the updated files to `main`; the included
+workflow redeploys the same URL. There are no npm dependencies, build step,
+external fonts or CDN scripts. Authenticate on your own computer with GitHub's
+credential manager or CLI; do not commit credentials or survey data.
 
-The `showIf` rule reads any other field by `"section.key"` path with
-`equals`, `notEquals`, `in`, `notIn`, `filled`, `empty`.
+## Edit the short form
 
----
+- `static/schema.js`: exactly 20 primary fields, numbered `n: 1` through `20`.
+  Each field supports a plain label, choices, example, hint, optional note and
+  expandable technical guidance. Q20 optionally attaches photos.
+- `static/app.js`: generic renderer, draft storage, review and submission.
+- `static/data.js`: additive compatibility mapping for earlier detailed data.
+- `static/submissions.js`: shared static/server dashboard and export/import.
+- `static/checklist.html`: uses the same schema so its 20 prompts stay in sync.
+
+Bump `SURVEY_SCHEMA.version` only with an explicit migration plan. Existing
+localStorage names are deliberately retained so an update does not strand drafts
+or submissions. Avoid deleting or renaming data keys without a compatibility map.
 
 ## Tests
 
-Both modes are covered by real-browser (Playwright) suites:
-
 ```bash
-pip install playwright && playwright install chromium
-python3 test_e2e.py        # 36 checks against the Flask server mode
-python3 test_static.py     # 8 checks against a plain static file server
-                           # (exactly what GitHub Pages provides)
-python3 test_live.py       # same 8 checks against the deployed Pages site
+pip install -r requirements-dev.txt
+python -m playwright install --with-deps chromium
+python test_static.py    # plain static host, temporary browser storage
+python test_e2e.py       # Flask with an isolated temporary DB
+python test_live.py      # deployed Pages, disposable browser storage only
 ```
-On the same device/browser: https://ewvarghese.github.io/ppe-survey/submissions.html → table + Export CSV button (opens in Excel/Sheets), or per-row view → Download JSON
 
+All three use `test_short_form.py`. Checks cover the exact question count,
+choices, accessibility labels, optional notes/photos, auto-save/reload, honest
+accuracy/consent wording, review/print/PDF, submit/update, dashboard, CSV/JSON
+round-trips, migration of old records, device-to-server upload, mobile layout and
+JavaScript exceptions. Local tests do not alter `surveys.db`. To test another
+static deployment: `SURVEY_URL=https://example.com/survey/ python test_live.py`.
