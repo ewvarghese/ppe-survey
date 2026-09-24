@@ -374,9 +374,6 @@ details.sub-detail summary { cursor: pointer; font-size: 12.5px; color: var(--br
 @media (max-width: 360px) { .checks { grid-template-columns: 1fr; } }
 @media print {
   .intro-strip, #missing, #review-storage, .answer-note summary, .tech-tip { display: none !important; }
-  .printing-survey .topbar p, .printing-survey .eyebrow { display: none; }
-  .printing-survey .section-card:not(#sec-review) { display: none !important; }
-  .printing-survey #sec-review { display: block !important; border: 0; }
   .card, .rev-sec { break-inside: auto; page-break-inside: auto; }
   .rev-row { break-inside: avoid; }
 }

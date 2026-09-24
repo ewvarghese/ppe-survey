@@ -220,13 +220,10 @@ def run(mode="static", url=None):
             info.value.save_as(path)
             return json.loads(path.read_text())
 
-        saved = download_json('#btn-download-json', 'draft.json')
-        check("JSON export keeps multiline answers and photos", saved['cameras']['setup_summary'] == ANSWERS[6] and len(saved['close']['site_photos']) == 1)
-        check("JSON export records estimate lines, total, currency and disclaimer", saved['service']['service_estimate']['maintenance_visits'] == {'qty': '4', 'rate': '2500'} and saved['service']['service_estimate']['_total'] == ESTIMATE_TOTAL and saved['service']['service_estimate']['_currency'] == '₹' and 'not a quotation' in saved['service']['service_estimate']['_note'])
-        pg.evaluate("window.print = () => { window.__printReview = document.body.classList.contains('printing-survey') && document.querySelector('#sec-review').style.display !== 'none'; }")
-        pg.locator('#btn-print').click()
-        check("print/PDF action uses the answer review", pg.evaluate('window.__printReview === true'))
-        check("a real PDF can be generated", pg.pdf().startswith(b'%PDF'))
+        review_controls = [t.strip() for t in pg.locator('#sec-review button, #sec-review label, #sec-review a').all_inner_texts()]
+        check("review step only verifies and submits (no download, print or import)", review_controls == ['Submit survey', 'Start a new blank survey'] and pg.locator('#sec-review input[type=file], #sec-review a[download], #sec-review [id*=download], #sec-review [id*=print]').count() == 0)
+        check("review lists every answer for verification", pg.locator('#review-body .rev-sec').count() == 7 and pg.locator('#review-body .rev-row').count() >= 20)
+        check("form has no client-side file download code", 'createObjectURL' not in pg.request.get(base + 'app.js').text())
         pg.locator('#btn-submit').click()
         pg.wait_for_function("document.querySelector('#btn-submit').textContent.startsWith('Submitted')")
         ref = pg.evaluate(f"JSON.parse(localStorage.getItem('{DRAFT}')).meta.ref")
@@ -260,7 +257,9 @@ def run(mode="static", url=None):
         check("dashboard provides all 20 readable answers", pg.locator('.answer-detail > b').count() == 21)  # 20 + photo heading
         check("dashboard detail includes the estimate breakdown", 'Maintenance visits: 4 × ₹2500' in pg.locator('.survey-detail').inner_text())
         exported = download_json('[data-dl]', 'submitted.json')
-        check("downloaded JSON includes the saved reference", exported['meta']['ref'] == ref)
+        check("owner's JSON download includes the saved reference", exported['meta']['ref'] == ref)
+        check("submitted record keeps multiline answers and photos", exported['cameras']['setup_summary'] == ANSWERS[6] and len(exported['close']['site_photos']) == 1)
+        check("submitted record has estimate lines, total, currency and disclaimer", exported['service']['service_estimate']['maintenance_visits'] == {'qty': '4', 'rate': '2500'} and exported['service']['service_estimate']['_total'] == ESTIMATE_TOTAL and exported['service']['service_estimate']['_currency'] == '₹' and 'not a quotation' in exported['service']['service_estimate']['_note'])
         with pg.expect_download() as info:
             pg.locator('#btn-csv').click()
         path = Path(tmp) / 'export.csv'; info.value.save_as(path)
@@ -313,19 +312,19 @@ def run(mode="static", url=None):
 
         # Migration when opening an old saved draft is additive, not destructive.
         pg.goto(base, wait_until='networkidle')
-        pg.locator('#nav button').last.click()
-        pg.locator('#btn-import').set_input_files(str(legacy_file))
+        pg.evaluate(f"localStorage.setItem('{DRAFT}', {json.dumps(json.dumps(LEGACY))})")
+        pg.goto(base, wait_until='networkidle')
         pg.wait_for_function("document.querySelector('[name=\"respondent.company_name\"]').value === 'Earlier Survey Industries'")
-        pg.wait_for_timeout(600)
+        pg.locator('[name="respondent.company_name"]').fill('Earlier Survey Industries')  # touch so the upgraded draft is written back
+        pg.wait_for_timeout(700)
         migrated = pg.evaluate(f"JSON.parse(localStorage.getItem('{DRAFT}'))")
         check("earlier draft becomes the 20-question form", pg.locator('[data-question]').count() == 20 and migrated['meta']['form_version'] == '2.1')
         check("earlier maintenance expectations land in the service section without a cost estimate", not migrated['service'].get('service_estimate') and not migrated['service'].get('service_arrangement'))
         check("migration retains original sections and zone photos", migrated['safety'] == LEGACY['safety'] and migrated['cameras']['profiles'] == LEGACY['cameras']['profiles'] and migrated['custom_earlier_section'] == LEGACY['custom_earlier_section'])
         check("migration maps accuracy, compute and new-hardware willingness", '92' in migrated['model']['acceptance_targets'] and 'RTX 4060' in migrated['server']['has_existing_server_notes'] and migrated['server']['willing_new_server'] == 'yes_lease')
         check("migration never invents training consent", 'Video use for model improvement approved' not in migrated['close']['permissions'])
+        check("legacy raw data remains in the upgraded draft", migrated['next']['fit_score'] == 7 and migrated['custom_earlier_section']['must_survive'] == LEGACY['custom_earlier_section']['must_survive'])
         pg.locator('#nav button').last.click()
-        migrated_export = download_json('#btn-download-json', 'migrated.json')
-        check("legacy raw data remains in downloadable output", migrated_export['cameras']['profiles'] == LEGACY['cameras']['profiles'] and migrated_export['next']['fit_score'] == 7)
         pg.locator('#btn-new').click()
         check("new survey resets only the draft", pg.locator('[name="respondent.company_name"]').input_value() == '' and pg.locator('#progress-pct').inner_text() == '0 / 20 answered')
         pg.goto(base+'submissions.html', wait_until='networkidle')

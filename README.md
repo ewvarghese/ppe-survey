@@ -17,12 +17,16 @@ yearly cost calculator (quantities × unit rates typed by the surveyor).
 
 Use this link to view submissions, export CSV, download JSON or import survey
 files. The form's header, sidebar, review step and field checklist no longer link
-to the dashboard. The form also no longer fetches or displays submission counts.
+to the dashboard, and the form no longer fetches or displays submission counts.
+**The review step only lets the respondent check their answers and submit** — it
+has no download, print or import controls; all output comes from this dashboard.
 
 **On GitHub Pages, open this link in the same device/browser that holds the
-records.** Other surveyors' submissions do not arrive here automatically. They can
-send you their **Download JSON copy** from the form's review step; use **Import
-JSON** on your dashboard to combine those files, then export CSV.
+records.** Submissions made on other devices do not arrive here automatically:
+open the dashboard on each surveyor's device, use **Backup JSON** there, then
+**Import JSON** on your own dashboard to combine the files and export CSV. If
+customers fill the form on their own devices, run the optional survey server so
+submissions reach you directly.
 
 > **Link removal only — not private access.** The repository and dashboard URL
 > remain public; anyone who knows the URL can open the page. It shows the records
@@ -115,7 +119,8 @@ not replace normal safety controls.
 
 - Auto-saving drafts, restore after reload, 20-question progress, mobile and
   keyboard navigation (`Alt + ←/→`).
-- Review, submit/update with reference ID, print/save PDF, JSON import/export.
+- Review of every answer (missing required items listed), submit/update with a
+  reference ID. No download, print or import on the respondent's review step.
 - Up to eight optional site photos in Q20; images are resized. Only attach
   images with permission.
 - Dashboard with search/sort, readable answers/photos, delete, CSV export,
@@ -150,10 +155,11 @@ https://ewvarghese.github.io/ppe-survey/submissions.html
 - **Import JSON**: merge individual survey files or bulk backups. Existing
   references are updated rather than duplicated.
 
-Back up regularly. Clearing site data, private-browsing sessions or a device
-reset can remove local drafts/submissions. Browser storage is limited; if saving
-fails, keep a JSON copy. Once loaded, device-mode editing/submission needs no
-backend; a fresh page load while fully offline is not guaranteed.
+Back up regularly from the dashboard. Clearing site data, private-browsing
+sessions or a device reset can remove local drafts/submissions. Browser storage
+is limited; if saving fails, remove some photos. Once loaded, device-mode
+editing/submission needs no backend; a fresh page load while fully offline is
+not guaranteed.
 
 ### Server mode
 
@@ -233,7 +239,7 @@ python test_live.py      # deployed Pages, disposable browser storage only
 
 All three use `test_short_form.py`. Checks cover the exact question count,
 choices, accessibility labels, optional notes/photos, auto-save/reload, honest
-accuracy/consent wording, review/print/PDF, submit/update, dashboard, CSV/JSON
+accuracy/consent wording, a review step without download/print/import, submit/update, dashboard, CSV/JSON
 round-trips, migration of old records, device-to-server upload, mobile layout, removal of
 respondent-facing dashboard links/count requests, and JavaScript exceptions. Local tests do not alter `surveys.db`. To test another
 static deployment: `SURVEY_URL=https://example.com/survey/ python test_live.py`.

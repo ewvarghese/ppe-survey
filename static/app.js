@@ -1,7 +1,8 @@
 /* ==========================================================================
    PPE Detection Site Survey - form engine
    Renders every question from schema.js, auto-saves to localStorage,
-   submits to the Flask API, and exports JSON / print copies.
+   and submits to the Flask API or to this browser's storage. The review step
+   only verifies answers and submits; output/export lives in the owner dashboard.
    ========================================================================== */
 (function () {
   "use strict";
@@ -28,10 +29,10 @@
   /* ------------------------------------------------------------------ *
    * STORAGE MODES
    *  "server" - a survey server (app.py) is reachable: submissions are
-   *             shared across devices and exportable as CSV from it.
+   *             shared across devices; the owner exports CSV from it.
    *  "device" - static hosting (e.g. GitHub Pages) or offline: every
-   *             submission is stored in this browser only, and can be
-   *             exported as JSON / merged later on the office machine.
+   *             submission is stored in this browser only; the owner
+   *             collects it from the dashboard on this device.
    * ------------------------------------------------------------------ */
   let serverMode = null;   // null = not probed yet
 
@@ -65,12 +66,12 @@
     if (serverMode === null) { el.textContent = "Checking storage…"; return; }
     el.innerHTML = serverMode
       ? `Storage: <b>survey server</b> (shared across devices)`
-      : `Storage: <b>this device only</b> — keep a JSON copy as a backup`;
+      : `Storage: <b>this device only</b>`;
     
     const note = $("#review-storage");
     if (note) note.innerHTML = serverMode
-      ? 'Submitting saves to the <b>shared survey server</b>. You can also download a JSON backup.'
-      : 'Submitting saves <b>only in this browser</b>, not in GitHub. Use <b>Download JSON copy</b> to keep a backup of this survey or share it with the survey owner. Do not clear browser data before backing up.';
+      ? 'Check the answers above, then submit. Submitting saves this survey to the <b>shared survey server</b>; the survey owner receives it from there.'
+      : 'Check the answers above, then submit. Submitting saves this survey <b>only in this browser</b>; the survey owner collects it from this device. Do not clear browser data until it has been collected.';
   }
 
   /* ------------------------------- state ------------------------------- */
@@ -618,16 +619,10 @@
         <p>${esc(sec.desc)}</p></div>
       <div id="missing"></div>
       <div id="review-body"></div>
-      <div class="btn-row" style="margin:16px 0 6px">
-        <button type="button" class="btn btn-ghost" id="btn-download-json">Download JSON copy</button>
-        <button type="button" class="btn btn-ghost" id="btn-print">Print / save PDF</button>
-        <button type="button" class="btn btn-ghost" id="btn-new">Start a new blank survey</button>
-      </div>
       <div class="callout" id="review-storage" style="margin-top:14px">Checking storage…</div>
       <div class="btn-row" style="margin-top:14px">
         <button type="button" class="btn btn-ok" id="btn-submit">Submit survey</button>
-        <label class="btn btn-ghost" style="cursor:pointer">Import a saved JSON
-          <input type="file" accept="application/json" id="btn-import" style="display:none"></label>
+        <button type="button" class="btn btn-ghost" id="btn-new">Start a new blank survey</button>
       </div>`;
     return card;
   }
@@ -666,7 +661,7 @@
 
     if (state.meta?.migrated_from) {
       const notice = document.createElement("div"); notice.className = "callout";
-      notice.textContent = "Earlier detailed answers are preserved. The short form shows summaries; the JSON copy and CSV export also keep the original fields and photos.";
+      notice.textContent = "Earlier detailed answers are preserved. The short form shows summaries; the original fields and photos stay in the submitted record.";
       body.prepend(notice);
     }
     $("#missing").innerHTML = missingTotal
@@ -746,7 +741,7 @@
         saveTimer = null;
         setSaveIndicator("", "Draft saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       } catch (e) {
-        setSaveIndicator("idle", "Not saved (storage full) - download a JSON copy");
+        setSaveIndicator("idle", "Not saved (storage full) - remove some photos and retry");
       }
     }, 450);
   }
@@ -855,19 +850,9 @@
       btn.textContent = `Submitted ✓  ${ref}`;
       renderReview();
     } catch (e) {
-      toast("Submit failed: " + e.message + ". Use 'Download JSON copy'.", "err");
+      toast("Submit failed: " + e.message + ". Your answers are still saved on this device; please try again.", "err");
       btn.disabled = false; btn.textContent = "Submit survey";
     }
-  }
-
-  /* ------------------------------- misc -------------------------------- */
-  function download(filename, text, type) {
-    const blob = new Blob([text], { type: type || "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
   /* review-card buttons are re-created by render(), so they must be re-bound
@@ -880,24 +865,8 @@
     submitBtn.disabled = false;
     submitBtn.textContent = submittedRef ? "Update submitted survey" : "Submit survey";
 
-    $("#btn-download-json").onclick = () => {
-      const company = ((state.respondent && state.respondent.company_name) || "site")
-        .replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-      download(`ppe-survey-${company}-${new Date().toISOString().slice(0, 10)}.json`,
-        JSON.stringify(buildPayload(), null, 2));
-      toast("JSON copy downloaded.");
-    };
-
-    $("#btn-print").onclick = () => {
-      const before = currentSection;
-      goTo(SCHEMA.sections.length - 1, true);
-      document.body.classList.add("printing-survey");
-      try { window.print(); }
-      finally { document.body.classList.remove("printing-survey"); goTo(before, true); }
-    };
-
     $("#btn-new").onclick = () => {
-      if (!confirm("Start a new blank survey? The current draft will be cleared (submit or download it first).")) return;
+      if (!confirm("Start a new blank survey? The current draft will be cleared (submit it first if you want to keep it).")) return;
       clearTimeout(saveTimer); saveTimer = null;
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_ID_KEY);
@@ -907,23 +876,6 @@
       render();
       goTo(0);
       toast("New blank survey started.");
-    };
-
-    $("#btn-import").onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const fr = new FileReader();
-      fr.onload = () => {
-        try {
-          const parsed = JSON.parse(fr.result);
-          if (!window.SurveyData.valid(parsed)) throw new Error("Not a survey");
-          state = hydrate(parsed);
-          submittedRef = state.meta.ref || null;
-          save(); render(); goTo(0); toast("JSON imported.");
-        } catch (err) { toast("That file is not a valid survey JSON.", "err"); }
-      };
-      fr.readAsText(file);
-      e.target.value = "";
     };
   }
 

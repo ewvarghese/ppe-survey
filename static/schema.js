@@ -148,7 +148,7 @@
           photos: { k: "site_photos", max: 8, l: "Site photos (optional)", hint: "With the permission recorded above, attach views of key zones, camera/recorder labels or server specs. Photos are kept in JSON; CSV shows the photo count." } },
       ],
     },
-    { id: "review", nav: "Review & submit", title: "Review and submit", desc: "Check your answers, then submit or download a copy.", special: "review", fields: [] },
+    { id: "review", nav: "Review & submit", title: "Review and submit", desc: "Check every answer with the customer, then submit.", special: "review", fields: [] },
   ];
   for (const sec of sections) for (const f of sec.fields) f.span = 2;
   window.SURVEY_SCHEMA = { version: "2.1", questionCount: 20, sections };
