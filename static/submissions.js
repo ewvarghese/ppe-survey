@@ -37,10 +37,13 @@
       budget: p.commercial?.total_budget || "—",
       payment: label("commercial", "preferred_model", p.commercial?.preferred_model),
       decision: p.commercial?.decision_plan || "",
-      next: p.commercial?.next_steps || "",
+      next: p.close?.next_steps || "",
+      serviceNow: label("service", "service_arrangement", p.service?.service_arrangement),
+      serviceNeeds: Array.isArray(p.service?.service_needs) ? p.service.service_needs.join(", ") : "",
+      serviceCost: n(p.service?.service_estimate?._total),
       intent: n(original.commercial?.buying_signals),
       date: p.respondent?.survey_date || p.meta?.survey_date || (r.created_at || "").slice(0, 10),
-      legacy: original.meta?.form_version !== "2.0",
+      legacy: original.meta?.form_version !== window.SURVEY_SCHEMA.version,
     };
   }
   // Keep original field names and all earlier detailed answers in CSV.
@@ -75,7 +78,11 @@
     const willing = ROWS.filter((r) => ["yes_capex", "yes_lease", "yes_edge", "cloud", "maybe"].includes(r.willingId)).length;
     const pilots = ROWS.filter((r) => ["yes_paid", "yes_free"].includes(r.pilotId)).length;
     const cams = ROWS.reduce((sum, r) => sum + (r.scopeCams || 0), 0);
-    const stats = [["Surveys", ROWS.length], ["Cameras (known count)", cams], ["Open to extra hardware", willing], ["Open to a pilot", pilots], ["On this device only", ROWS.filter((r) => r.deviceOnly).length]];
+    const serviceEstimates = ROWS.filter((r) => r.serviceCost != null);
+    const serviceTotal = serviceEstimates.reduce((sum, r) => sum + r.serviceCost, 0);
+    const stats = [["Surveys", ROWS.length], ["Cameras (known count)", cams], ["Open to extra hardware", willing], ["Open to a pilot", pilots],
+      ["Service estimates entered", serviceEstimates.length], ["Estimated yearly service (sum)", serviceEstimates.length ? "₹" + serviceTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : "—"],
+      ["On this device only", ROWS.filter((r) => r.deviceOnly).length]];
     $("#stats").innerHTML = stats.map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
   }
   function detail(r) {
@@ -83,8 +90,10 @@
     const html = [];
     for (const sec of window.SURVEY_SCHEMA.sections) for (const f of sec.fields) {
       const v = p[sec.id]?.[f.k], note = p[sec.id]?.[f.k + "_notes"];
-      if (empty(v) && empty(note)) continue;
-      html.push(`<div class="answer-detail"><b>${f.n}. ${esc(f.l)}</b>${!empty(v) ? `<p>${esc(answerLabel(f, v))}</p>` : ""}${!empty(note) ? `<p class="note">${esc(note)}</p>` : ""}</div>`);
+      const follow = f.followup ? p[sec.id]?.[f.followup.k] : "";
+      const estimate = f.estimate ? window.SurveyData.describeEstimate(f.estimate, p[sec.id]?.[f.estimate.k]) : "";
+      if (empty(v) && empty(note) && empty(follow) && empty(estimate)) continue;
+      html.push(`<div class="answer-detail"><b>${f.n}. ${esc(f.l)}</b>${!empty(v) ? `<p>${esc(answerLabel(f, v))}</p>` : ""}${!empty(follow) ? `<p><b>${esc(f.followup.l)}</b>${esc(follow)}</p>` : ""}${!empty(estimate) ? `<p class="note">${esc(estimate)}</p>` : ""}${!empty(note) ? `<p class="note">${esc(note)}</p>` : ""}</div>`);
     }
     const photos = new Set();
     const findPhotos = (o) => {
@@ -109,13 +118,14 @@
     $("#count").textContent = rows.length + " shown";
     if (!rows.length) { $("#table").innerHTML = '<div class="empty">No matching surveys.<br><small>Submit a survey in this browser, or import saved JSON copies.</small></div>'; return; }
     const clip = (s) => `<div class="clip">${esc(s || "—")}</div>`;
-    $("#table").innerHTML = `<table class="subs"><thead><tr><th>Company / site</th><th>Visit / reference</th><th>Cameras</th><th>Computer / new hardware</th><th>AI targets / pilot</th><th>Budget / payment</th><th>Approval / next step</th><th>Answers & exports</th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.deviceOnly ? "dev-only" : ""}">
+    $("#table").innerHTML = `<table class="subs"><thead><tr><th>Company / site</th><th>Visit / reference</th><th>Cameras</th><th>Computer / new hardware</th><th>AI targets / pilot</th><th>Budget / payment</th><th>Camera & network service</th><th>Approval / next step</th><th>Answers & exports</th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.deviceOnly ? "dev-only" : ""}">
       <td class="cell-note"><b>${esc(r.company)}</b>${r.site ? `<br><small>${esc(r.site)}</small>` : ""}<small>${clip(r.contact)}</small></td>
       <td class="mono">${esc(r.date)}<br><small>${esc(r.ref)}</small>${r.deviceOnly ? '<br><small>Device only</small>' : ""}</td>
       <td>${esc(r.cameras)}</td>
       <td class="cell-note">${esc(r.existing)}<br><small>Extra hardware: ${esc(r.willing)}</small></td>
       <td class="cell-note">${clip(r.targets)}<small>Pilot: ${esc(r.pilot)}</small></td>
       <td class="cell-note">${esc(r.budget)}<br><small>${esc(r.payment)}</small></td>
+      <td class="cell-note">${esc(r.serviceNow)}${clip(r.serviceNeeds)}<small>${r.serviceCost != null ? "Est. ₹" + r.serviceCost.toLocaleString("en-IN", { maximumFractionDigits: 0 }) + "/year (estimate)" : "No cost estimate"}</small></td>
       <td class="cell-note">${clip(r.decision)}<small>${clip(r.next)}</small>${r.intent != null ? `<small>Earlier buying intent: ${r.intent}/10</small>` : ""}</td>
       <td><details class="sub-detail" data-detail="${i}"><summary>View answers</summary><div class="survey-detail"></div></details>
       <div class="btn-row" style="margin-top:8px"><button class="btn-mini" data-dl="${i}">Download JSON</button><button class="btn-mini" data-copy="${i}">Copy JSON</button><button class="btn-mini" data-del="${i}">Delete</button></div></td>

@@ -1,9 +1,11 @@
 # AI PPE Detection — 20-question site survey
 
 A short, mobile-friendly field survey for pre-sales visits. **Exactly 20 numbered
-questions in five sections**, followed by review and submit. Plain-language
+questions in seven short sections**, followed by review and submit. Plain-language
 choices, short answers and “Not sure” responses replace the earlier long form.
 Optional notes keep technical detail available without a second questionnaire.
+Version 2.1 adds a **camera and network maintenance service** section with a
+yearly cost calculator (quantities × unit rates typed by the surveyor).
 
 **Survey link to share:** https://ewvarghese.github.io/ppe-survey/
 
@@ -47,11 +49,11 @@ JSON** on your dashboard to combine those files, then export CSV.
 | | 13 | What accuracy and false alarms would you accept? |
 | | 14 | Would you try a pilot? |
 | | 15 | How should alerts and reports reach your team? |
-| Budget & next steps | 16 | How would you like to pay? |
-| | 17 | What budget is possible? |
-| | 18 | Who can approve this, and when? |
-| | 19 | What permission has the site given? |
-| | 20 | What should happen next? |
+| Budget & approval | 16 | How would you like to pay? |
+| | 17 | What budget is possible, and who can approve it? (budget band + approval/timeline box) |
+| Camera & network service | 18 | Who maintains the cameras and network today? |
+| | 19 | What ongoing camera and network service is needed, and what would it cost per year? (checklist + cost calculator) |
+| Permissions & next steps | 20 | What permission has the site given, and what should happen next? (permissions + next-steps box + photos) |
 
 The visit date is recorded automatically. Optional notes and photos belong to
 these answers; they do not open additional numbered questions or a long repeatable
@@ -78,9 +80,29 @@ separate mandatory metrics**.
 - **Commercial:** CAPEX/OPEX, per-camera/lease options, first-year budget band,
   hardware/monthly splits, funding, approvals, decision maker, timeline, tender,
   competitors, ROI, rollout, service/SLA, maintenance, warranty and training.
+- **Camera & network service (ongoing maintenance only, not installation or
+  upgrades):** who maintains the CCTV and network today (AMC vendor, on-call
+  vendor, in-house, nobody), current contract/vendor details and known faults,
+  which services the site expects (repairs/replacements, cleaning and focus checks,
+  recorder and storage upkeep, switch/cabling/PoE repairs, remote health
+  monitoring, AMC) and a **yearly cost estimate calculator**.
 - **Close:** separate permissions for visits, photos, testing and model
   improvement; privacy/data ownership restrictions; surveyor assessment,
   recommended configuration, estimates, blockers, next action/owner/date and photos.
+
+### Service cost estimate — how it works and what it is not
+
+The Q19 calculator has six lines (maintenance visits, cameras under service,
+expected camera replacements, network/cabling repair call-outs, remote monitoring,
+other). For each line the surveyor enters a **quantity** and a **unit rate in ₹**
+taken from your own price list or a service provider's quotation. The form
+multiplies each line and adds them up; a line without both numbers is left out,
+never guessed. The result is saved as `service.service_estimate` with the lines,
+`_total`, `_currency` and a fixed `_note` ("…not a quotation"), and is shown in the
+review, the dashboard and the CSV/JSON exports. The app contains **no built-in
+prices**, no taxes and no site-condition adjustments; treat every total as a
+rough planning estimate, not an offer or quotation. Record where each rate came
+from in the "Cost basis and quotes" note.
 
 Guidance is optional: answer only what is known. Requested PPE types/integrations
 are requirements to assess, not claims that the product supports all of them.
@@ -182,7 +204,9 @@ credential manager or CLI; do not commit credentials or survey data.
 
 - `static/schema.js`: exactly 20 primary fields, numbered `n: 1` through `20`.
   Each field supports a plain label, choices, example, hint, optional note and
-  expandable technical guidance. Q20 optionally attaches photos.
+  expandable technical guidance. A field may also carry a `followup` text box
+  (Q17 approval plan, Q20 next steps) or an `estimate` calculator (Q19) without
+  becoming an extra numbered question. Q20 optionally attaches photos.
 - `static/app.js`: generic renderer, draft storage, review and submission.
 - `static/data.js`: additive compatibility mapping for earlier detailed data.
 - `static/submissions.js`: shared static/server dashboard and export/import.
@@ -191,6 +215,11 @@ credential manager or CLI; do not commit credentials or survey data.
 Bump `SURVEY_SCHEMA.version` only with an explicit migration plan. Existing
 localStorage names are deliberately retained so an update does not strand drafts
 or submissions. Avoid deleting or renaming data keys without a compatibility map.
+Version history: v1 (long form) → v2.0 (20 questions, five sections) → v2.1
+(service section; `permissions`, `next_steps` and `site_photos` moved from
+`commercial` to `close`). `static/data.js` upgrades v1 and v2.0 drafts in place,
+and the dashboard reads records of every version; older records simply show
+"No cost estimate" for the service column.
 
 ## Tests
 

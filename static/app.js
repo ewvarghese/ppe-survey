@@ -66,6 +66,7 @@
     el.innerHTML = serverMode
       ? `Storage: <b>survey server</b> (shared across devices)`
       : `Storage: <b>this device only</b> — keep a JSON copy as a backup`;
+    
     const note = $("#review-storage");
     if (note) note.innerHTML = serverMode
       ? 'Submitting saves to the <b>shared survey server</b>. You can also download a JSON backup.'
@@ -90,6 +91,8 @@
         else s[sec.id][f.k] = "";
         if (f.note) s[sec.id][f.k + "_notes"] = "";
         if (f.photos) s[sec.id][f.photos.k] = [];
+        if (f.followup) s[sec.id][f.followup.k] = "";
+        if (f.estimate) s[sec.id][f.estimate.k] = {};
       });
     });
     return s;
@@ -417,6 +420,13 @@
       inp.addEventListener("input", () => { setVal(inp.value); save(); updateProgress(); });
       inp.addEventListener("change", () => { applyVisibility(); });
     }
+    // A follow-up text box completes the same question (e.g. next steps).
+    if (f.followup) {
+      const follow = buildField({ ...f.followup, t: "textarea", span: 2 }, secId);
+      follow.classList.add("followup");
+      wrap.appendChild(follow);
+    }
+    if (f.estimate) wrap.appendChild(buildEstimate(f, secId));
     // Optional notes belong to the same answer: no nested questionnaire.
     if (f.note) {
       const details = document.createElement("details");
@@ -439,6 +449,59 @@
       wrap.appendChild(details);
     }
     return wrap;
+  }
+
+  /* Quantity × unit-rate calculator. Rates must be typed by the surveyor from a
+     price list or quotation; nothing is pre-filled, and the total is labelled
+     an estimate, never a quotation. */
+  const money = (v) => Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  function estimateTotal(est) {
+    let total = 0, any = false;
+    Object.values(est || {}).forEach((line) => {
+      const q = Number(line && line.qty), r = Number(line && line.rate);
+      if (line && line.qty !== "" && line.rate !== "" && Number.isFinite(q) && Number.isFinite(r) && q >= 0 && r >= 0) { total += q * r; any = true; }
+    });
+    return { total, any };
+  }
+  function buildEstimate(f, secId) {
+    const cfg = f.estimate;
+    const box = document.createElement("details");
+    box.className = "answer-note estimate";
+    const est = state[secId][cfg.k] || (state[secId][cfg.k] = {});
+    box.open = Object.values(est).some((line) => line && (line.qty !== "" || line.rate !== ""));
+    box.innerHTML = `<summary>${esc(cfg.title)}</summary>
+      <table class="estimate-table"><thead><tr><th>Service</th><th>Quantity</th><th>Unit rate (${esc(cfg.currency)})</th><th>Line total</th></tr></thead>
+      <tbody>${cfg.lines.map((line) => `<tr data-line="${esc(line.k)}">
+        <td><label for="est-${esc(secId)}-${esc(line.k)}-qty">${esc(line.l)}</label><small>${esc(line.unit)}</small></td>
+        <td><input type="number" inputmode="decimal" min="0" step="any" id="est-${esc(secId)}-${esc(line.k)}-qty" placeholder="${esc(line.ph || "")}" aria-label="${esc(line.l)} quantity"></td>
+        <td><input type="number" inputmode="decimal" min="0" step="any" placeholder="rate" aria-label="${esc(line.l)} unit rate in ${esc(cfg.currency)}"></td>
+        <td class="line-total">—</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="3">Estimated total per year</td><td class="grand-total">—</td></tr></tfoot></table>
+      ${cfg.hint ? `<div class="hint">${esc(cfg.hint)}</div>` : ""}`;
+    const refresh = () => {
+      $$("tr[data-line]", box).forEach((row) => {
+        const line = est[row.dataset.line] || {};
+        const q = Number(line.qty), r = Number(line.rate);
+        const ok = line.qty !== "" && line.rate !== "" && line.qty != null && line.rate != null && Number.isFinite(q) && Number.isFinite(r);
+        $(".line-total", row).textContent = ok ? cfg.currency + money(q * r) : "—";
+      });
+      const { total, any } = estimateTotal(est);
+      $(".grand-total", box).textContent = any ? cfg.currency + money(total) : "—";
+      if (any) est._total = Math.round(total * 100) / 100; else delete est._total;
+    };
+    $$("tr[data-line]", box).forEach((row) => {
+      const [qty, rate] = $$("input", row);
+      const line = est[row.dataset.line] || {};
+      qty.value = line.qty ?? ""; rate.value = line.rate ?? "";
+      const update = () => {
+        if (qty.value === "" && rate.value === "") delete est[row.dataset.line];
+        else est[row.dataset.line] = { qty: qty.value, rate: rate.value };
+        refresh(); save(); updateProgress();
+      };
+      qty.addEventListener("input", update); rate.addEventListener("input", update);
+    });
+    refresh();
+    return box;
   }
 
   function repeaterBlank(f) {
@@ -516,8 +579,10 @@
       }
       total++;
       const v = state[sec.id][f.k];
-      if (!isEmpty(v) || (f.note && !isEmpty(state[sec.id][f.k + "_notes"])) || (f.photos && !isEmpty(state[sec.id][f.photos.k]))) filled++;
+      if (!isEmpty(v) || (f.note && !isEmpty(state[sec.id][f.k + "_notes"])) || (f.photos && !isEmpty(state[sec.id][f.photos.k]))
+        || (f.followup && !isEmpty(state[sec.id][f.followup.k])) || (f.estimate && estimateTotal(state[sec.id][f.estimate.k]).any)) filled++;
       if (f.r && isEmpty(v)) requiredLeft++;
+      if (f.followup && f.followup.r && isEmpty(state[sec.id][f.followup.k])) requiredLeft++;
     });
     return { filled, total, requiredLeft };
   }
@@ -583,6 +648,7 @@
         sec.fields.forEach((f) => {
           if (!fieldVisible(f)) return;
           if (f.r && isEmpty(state[sec.id][f.k])) missingHtml.push(`<li>Question ${f.n} — <b>${esc(f.l)}</b></li>`);
+          if (f.followup && f.followup.r && isEmpty(state[sec.id][f.followup.k])) missingHtml.push(`<li>Question ${f.n} — <b>${esc(f.followup.l)}</b></li>`);
           if (f.t === "repeater") (state[sec.id][f.k] || []).forEach((item, ri) => {
             f.fields.forEach((sf) => { if (sf.r && isEmpty(item[sf.k])) missingHtml.push(`<li>Section ${i + 1}, entry ${ri + 1} — <b>${esc(sf.l)}</b></li>`); });
           });
@@ -632,6 +698,8 @@
         return;
       }
       push(`${f.n}. ${f.l}`, window.SurveyData.answerLabel(f, state[sec.id][f.k]));
+      if (f.followup) push(`Q${f.n} · ${f.followup.l}`, state[sec.id][f.followup.k]);
+      if (f.estimate) push(`Q${f.n} · ${f.estimate.title}`, window.SurveyData.describeEstimate(f.estimate, state[sec.id][f.estimate.k]));
       if (f.note) push(`Q${f.n} · Note`, state[sec.id][f.k + "_notes"]);
       if (f.photos) push(`Q${f.n} · ${f.photos.l}`, state[sec.id][f.photos.k]);
     });
@@ -720,6 +788,12 @@
         } else if (isEmpty(p[sec.id][f.k])) delete p[sec.id][f.k];
         if (f.note && isEmpty(p[sec.id][f.k + "_notes"])) delete p[sec.id][f.k + "_notes"];
         if (f.photos && isEmpty(p[sec.id][f.photos.k])) delete p[sec.id][f.photos.k];
+        if (f.followup && isEmpty(p[sec.id][f.followup.k])) delete p[sec.id][f.followup.k];
+        if (f.estimate) {
+          const est = p[sec.id][f.estimate.k] || {};
+          if (!estimateTotal(est).any) delete p[sec.id][f.estimate.k];
+          else { p[sec.id][f.estimate.k] = { ...est, _currency: f.estimate.currency, _note: "Estimate from surveyor-entered quantities and unit rates; not a quotation." }; }
+        }
       });
     });
     p.meta = Object.assign({}, p.meta, {

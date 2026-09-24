@@ -18,9 +18,32 @@
       .map((k) => `${title(k)}: ${describe(o[k])}`).join("\n");
   }
   const join = (...xs) => xs.filter(Boolean).join("\n");
+  function describeEstimate(cfg, est) {
+    if (!est || typeof est !== "object") return "";
+    const rows = (cfg.lines || []).filter((line) => est[line.k] && est[line.k].qty !== "" && est[line.k].rate !== "" && est[line.k].qty != null && est[line.k].rate != null)
+      .map((line) => `${line.l}: ${est[line.k].qty} × ${cfg.currency}${est[line.k].rate} = ${cfg.currency}${(Number(est[line.k].qty) * Number(est[line.k].rate)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
+    if (!rows.length) return "";
+    const total = rows.length && est._total != null ? est._total : null;
+    return rows.join("\n") + (total != null ? `\nEstimated total: ${cfg.currency}${Number(total).toLocaleString("en-IN", { maximumFractionDigits: 2 })} per year (estimate, not a quotation)` : "");
+  }
+  // v2.0 -> v2.1: permissions and next steps became one closing question, and the
+  // service section is new. Nothing is removed; keys simply move to their new section.
+  function upgradeShortForm(p) {
+    if (p.meta?.form_version !== "2.0") return p;
+    const c = p.commercial || {};
+    p.close = { ...(p.close || {}) };
+    for (const key of ["permissions", "permissions_notes", "next_steps", "site_photos"]) {
+      if (!empty(c[key]) && empty(p.close[key])) p.close[key] = c[key];
+      delete c[key];
+    }
+    p.service = { ...(p.service || {}) };
+    p.meta = { ...(p.meta || {}), migrated_from: p.meta?.migrated_from || "2.0", form_version: "2.1" };
+    return p;
+  }
   function migrate(input) {
     const p = JSON.parse(JSON.stringify(input));
-    if (p.meta?.form_version === "2.0") return p;
+    if (p.meta?.form_version === "2.1") return p;
+    if (p.meta?.form_version === "2.0") return upgradeShortForm(p);
     const fill = (section, key, v) => {
       p[section] = p[section] && typeof p[section] === "object" && !Array.isArray(p[section]) ? p[section] : {};
       if (empty(p[section][key]) && !empty(v)) p[section][key] = v;
@@ -54,12 +77,13 @@
     if (next.consent_photos === "yes") permissions.push("Site photos approved");
     if (next.consent_footage === "yes") permissions.push("Recorded video testing approved");
     if (m.data_use_consent === "Anonymised data may be used to improve the model") permissions.push("Video use for model improvement approved");
-    fill("commercial", "permissions", permissions);
-    fill("commercial", "permissions_notes", join(lines(next, ["consent_visit", "consent_footage", "consent_photos"]), lines(m, ["data_use_consent", "footage_available"]), lines(b, ["ownership"])));
-    fill("commercial", "next_steps", join(lines(next, Object.keys(next).filter((k) => !["site_photos", "consent_visit", "consent_footage", "consent_photos"].includes(k))), lines(b, ["support_expect", "sla_expect", "warranty_expect", "training_need", "concerns", "concern_notes", "buying_signals", "commercial_notes"])));
+    fill("close", "permissions", permissions);
+    fill("close", "permissions_notes", join(lines(next, ["consent_visit", "consent_footage", "consent_photos"]), lines(m, ["data_use_consent", "footage_available"]), lines(b, ["ownership"])));
+    fill("close", "next_steps", join(lines(next, Object.keys(next).filter((k) => !["site_photos", "consent_visit", "consent_footage", "consent_photos"].includes(k))), lines(b, ["support_expect", "sla_expect", "warranty_expect", "training_need", "concerns", "concern_notes", "buying_signals", "commercial_notes"])));
+    fill("service", "service_arrangement_notes", lines(b, ["amc_expect", "support_expect", "sla_expect", "warranty_expect"]));
     // Existing photos remain in their original fields; do not duplicate large
     // data URIs into the new draft, which could exhaust browser storage.
-    p.meta = { ...(p.meta || {}), migrated_from: p.meta?.form_version || "1.0", form_version: "2.0" };
+    p.meta = { ...(p.meta || {}), migrated_from: p.meta?.form_version || "1.0", form_version: "2.1" };
     return p;
   }
   function valid(p) {
@@ -70,5 +94,5 @@
     if (Array.isArray(value)) return value.join(", ");
     return (f.o || []).find((o) => typeof o === "object" && String(o.id) === String(value))?.label ?? value;
   }
-  window.SurveyData = { migrate, valid, get, empty, answerLabel, describe };
+  window.SurveyData = { migrate, valid, get, empty, answerLabel, describe, describeEstimate };
 })();

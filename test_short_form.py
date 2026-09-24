@@ -79,10 +79,20 @@ ANSWERS = {
     8: 'yes', 9: 'pc', 10: 'yes', 11: 'yes_lease', 12: 'yes',
     13: '90% minimum on agreed test; ≤5 false alarms per camera per shift; alerts within 10 seconds.',
     14: 'yes_paid', 15: ['Live dashboard', 'Email'], 16: 'saas', 17: '₹1–3 lakh',
-    18: 'Meera, Plant Head; MD approval needed. Start in 1–3 months.',
-    19: ['Site photos approved', 'Recorded video testing approved'],
+    18: 'on_call',
+    19: ['Camera repairs and replacements', 'Annual maintenance contract (AMC)'],
+    20: ['Site photos approved', 'Recorded video testing approved'],
+}
+FOLLOWUPS = {
+    17: 'Meera, Plant Head; MD approval needed. Start in 1–3 months.',
     20: 'Ravi to arrange a demo by Friday. IT to confirm GPU. Next-day support and operator training needed.',
 }
+ESTIMATE = {  # quantity, unit rate — typed by the surveyor from a price list
+    'maintenance_visits': ('4', '2500'),
+    'camera_replacements': ('2', '6000'),
+    'network_repairs': ('3', '1500'),
+}
+ESTIMATE_TOTAL = 4 * 2500 + 2 * 6000 + 3 * 1500  # 26,500
 NOTES = {
     4: 'Helmet at the gate; shoes in the workshop.',
     7: 'Move one camera lower in the welding bay.',
@@ -93,7 +103,9 @@ NOTES = {
     14: '2 cameras for 30 days; meet the targets above.',
     15: 'Supervisor acts on email; daily Excel report; keep evidence for 30 days.',
     17: 'Hardware ₹2 lakh; software ₹10,000/month. Approval pending.',
-    19: 'Testing only; no training permission. NDA and deletion after 30 days.',
+    18: 'Vendor XYZ CCTV; no contract; three cameras dead for months.',
+    19: 'Rates from our 2026 price list; taxes extra.',
+    20: 'Testing only; no training permission. NDA and deletion after 30 days.',
 }
 
 def run(mode="static", url=None):
@@ -121,7 +133,9 @@ def run(mode="static", url=None):
         fields = [(s["id"], f) for s in schema["sections"] for f in s["fields"]]
         check("exactly 20 schema questions numbered 1–20", len(fields) == 20 and [f["n"] for _, f in fields] == list(range(1, 21)))
         check("exactly 20 visible-question containers, no repeated sub-questionnaire", pg.locator("[data-question]").count() == 20 and pg.locator(".rep-item").count() == 0)
-        check("five short sections plus review", pg.locator("#nav button").count() == 6)
+        check("seven short sections plus review", pg.locator("#nav button").count() == 8)
+        check("camera & network service section exists with its own questions", pg.locator("#sec-service [data-question]").count() == 2)
+        check("service cost calculator is empty until the surveyor types rates", pg.evaluate("Array.from(document.querySelectorAll('.estimate-table input')).every(i => i.value === '')"))
         check("fresh progress starts at zero", pg.locator("#progress-pct").inner_text() == "0 / 20 answered")
         check("entry form has no output-dashboard links", pg.locator('a[href*="submissions.html"]').count() == 0)
         check("entry form does not show submission counts", pg.locator('#sub-count').count() == 0)
@@ -144,8 +158,17 @@ def run(mode="static", url=None):
                     q.locator(":scope > select").select_option(value)
                 else:
                     q.locator(":scope > input, :scope > textarea").fill(value)
+                if f["n"] in FOLLOWUPS:
+                    q.locator(".followup textarea").fill(FOLLOWUPS[f["n"]])
+                if f.get("estimate"):
+                    box = q.locator("details.estimate")
+                    box.locator("summary").click()
+                    for line, (qty, rate) in ESTIMATE.items():
+                        row = box.locator(f'tr[data-line="{line}"]')
+                        row.locator("input").nth(0).fill(qty)
+                        row.locator("input").nth(1).fill(rate)
                 if f["n"] in NOTES:
-                    details = q.locator("details.answer-note").first
+                    details = q.locator("details.answer-note:not(.estimate)").first
                     details.locator("summary").click()
                     details.locator("textarea").fill(NOTES[f["n"]])
             if i == 0:
@@ -157,23 +180,36 @@ def run(mode="static", url=None):
                 q.get_by_label("Safety shoes", exact=True).check()
 
         # Photos belong to Q20, not a 21st question.
-        photo = pg.locator('#question-20 details.answer-note')
+        photo = pg.locator('#question-20 details.answer-note:has(input[type="file"])')
         photo.locator('summary').click()
         photo.locator('input[type="file"]').set_input_files({"name": "approved-site.png", "mimeType": "image/png", "buffer": PIXEL})
         pg.wait_for_selector('#question-20 .thumb img')
         check("photo attachment works without adding a question", pg.locator("[data-question]").count() == 20)
+        check("service estimate multiplies quantity by typed unit rate", pg.locator("#question-19 .grand-total").inner_text() == "₹26,500")
+        check("estimate is labelled as not a quotation", "not a quotation" in pg.locator("#sec-service .callout").inner_text())
+        pg.locator('#nav button').nth(5).click()
+        rate_box = pg.locator('#question-19 tr[data-line="network_repairs"] input').nth(1)
+        rate_box.fill("")
+        pg.wait_for_timeout(100)
+        check("a line with a missing rate is excluded rather than guessed", pg.locator("#question-19 .grand-total").inner_text() == "₹22,000")
+        rate_box.fill("1500")
+        pg.locator('#nav button').nth(6).click()
         pg.wait_for_timeout(650)
         check("all 20 answers counted", pg.locator("#progress-pct").inner_text() == "20 / 20 answered")
         draft = pg.evaluate(f"JSON.parse(localStorage.getItem('{DRAFT}'))")
-        check("auto-save uses schema v2", draft["meta"]["form_version"] == "2.0")
+        check("auto-save uses schema v2.1", draft["meta"]["form_version"] == "2.1")
+        check("service answers and estimate saved in the draft", draft['service']['service_arrangement'] == 'on_call' and draft['service']['service_estimate']['_total'] == ESTIMATE_TOTAL)
+        check("approval plan and next steps saved as follow-ups", draft['commercial']['decision_plan'] == FOLLOWUPS[17] and draft['close']['next_steps'] == FOLLOWUPS[20])
         check("camera specs and GPU detail saved", 'H.265' in draft['cameras']['setup_summary'] and 'RTX 4060' in draft['server']['has_existing_server_notes'])
-        check("consent does not imply permission to train", 'Video use for model improvement approved' not in draft['commercial']['permissions'])
+        check("consent does not imply permission to train", 'Video use for model improvement approved' not in draft['close']['permissions'])
         pg.reload(wait_until="networkidle")
         check("answers and notes survive reload", pg.locator('[name="respondent.company_name"]').input_value() == ANSWERS[1] and pg.locator('[name="server.has_existing_server_notes"]').input_value() == NOTES[9])
         check("photo survives reload", pg.locator('#question-20 .thumb').count() == 1)
         pg.locator("#nav button").last.click()
         check("review has no missing required questions", 'All required fields are complete' in pg.locator('#missing').inner_text())
-        check("review shows human-readable choices and optional notes", 'Monthly / yearly subscription (OPEX)' in pg.locator('#review-body').inner_text() and 'RTX 4060' in pg.locator('#review-body').inner_text())
+        review_text = pg.locator('#review-body').inner_text()
+        check("review shows human-readable choices and optional notes", 'Monthly / yearly subscription (OPEX)' in review_text and 'RTX 4060' in review_text)
+        check("review shows the service estimate with its basis", 'A vendor is called only when something breaks' in review_text and '₹26,500' in review_text and 'not a quotation' in review_text)
         check("review tells the truth about storage", ('shared survey server' if mode == 'server' else 'only in this browser') in pg.locator('#review-storage').inner_text())
         check("review does not link to the output dashboard", pg.locator('#sec-review a[href*="submissions.html"]').count() == 0)
 
@@ -185,7 +221,8 @@ def run(mode="static", url=None):
             return json.loads(path.read_text())
 
         saved = download_json('#btn-download-json', 'draft.json')
-        check("JSON export keeps multiline answers and photos", saved['cameras']['setup_summary'] == ANSWERS[6] and len(saved['commercial']['site_photos']) == 1)
+        check("JSON export keeps multiline answers and photos", saved['cameras']['setup_summary'] == ANSWERS[6] and len(saved['close']['site_photos']) == 1)
+        check("JSON export records estimate lines, total, currency and disclaimer", saved['service']['service_estimate']['maintenance_visits'] == {'qty': '4', 'rate': '2500'} and saved['service']['service_estimate']['_total'] == ESTIMATE_TOTAL and saved['service']['service_estimate']['_currency'] == '₹' and 'not a quotation' in saved['service']['service_estimate']['_note'])
         pg.evaluate("window.print = () => { window.__printReview = document.body.classList.contains('printing-survey') && document.querySelector('#sec-review').style.display !== 'none'; }")
         pg.locator('#btn-print').click()
         check("print/PDF action uses the answer review", pg.evaluate('window.__printReview === true'))
@@ -210,6 +247,8 @@ def run(mode="static", url=None):
         pg.wait_for_selector('table.subs tbody tr')
         check("dashboard mode is correct", pg.locator('#mode-pill').inner_text() == ('SERVER MODE' if mode == 'server' else 'DEVICE MODE'))
         check("dashboard shows short-form hardware, pilot and payment answers", all(s in pg.locator('#table').inner_text() for s in ['Rent / pay monthly', 'Yes — paid pilot', '₹1–3 lakh', 'Monthly / yearly subscription']))
+        check("dashboard shows service arrangement, needs and yearly estimate", all(s in pg.locator('#table').inner_text() for s in ['A vendor is called only when something breaks', 'Annual maintenance contract (AMC)', 'Est. ₹26,500/year (estimate)']))
+        check("dashboard totals service estimates", '₹26,500' in pg.locator('#stats').inner_text())
         check("company HTML is safely treated as text", '<b>literal text</b>' in pg.locator('#table').inner_text() and pg.locator('#table b b').count() == 0)
         pg.locator('#q').fill('not-present')
         check("dashboard search filters rows", pg.locator('tbody tr').count() == 0)
@@ -218,7 +257,8 @@ def run(mode="static", url=None):
         pg.locator('#q').fill('')
         pg.locator('[data-detail] summary').click()
         pg.wait_for_selector('.answer-detail')
-        check("dashboard provides all 20 readable answers", pg.locator('.answer-detail b').count() == 21)  # 20 + photo heading
+        check("dashboard provides all 20 readable answers", pg.locator('.answer-detail > b').count() == 21)  # 20 + photo heading
+        check("dashboard detail includes the estimate breakdown", 'Maintenance visits: 4 × ₹2500' in pg.locator('.survey-detail').inner_text())
         exported = download_json('[data-dl]', 'submitted.json')
         check("downloaded JSON includes the saved reference", exported['meta']['ref'] == ref)
         with pg.expect_download() as info:
@@ -227,9 +267,27 @@ def run(mode="static", url=None):
         data = list(csv.DictReader(io.StringIO(path.read_text(encoding='utf-8-sig'))))
         check("CSV is Excel-readable with Unicode and one row", len(data) == 1 and data[0]['commercial.total_budget'] == '₹1–3 lakh')
         check("CSV preserves camera detail, notes and reference", data[0]['cameras.setup_summary'] == ANSWERS[6] and data[0]['server.has_existing_server_notes'] == NOTES[9] and data[0]['_reference_id'] == ref)
-        check("CSV summarises images instead of base64", data[0]['commercial.site_photos'] == '1 photo(s)' and 'data:image/' not in path.read_text())
+        check("CSV includes service arrangement, needs and estimate total", data[0]['service.service_arrangement'] == 'on_call' and 'Annual maintenance contract (AMC)' in data[0]['service.service_needs'] and data[0]['service.service_estimate._total'] == str(ESTIMATE_TOTAL))
+        check("CSV summarises images instead of base64", data[0]['close.site_photos'] == '1 photo(s)' and 'data:image/' not in path.read_text())
         backup = download_json('#btn-backup', 'backup.json')
-        check("bulk JSON backup includes complete answers/photos", len(backup['surveys']) == 1 and len(backup['surveys'][0]['commercial']['site_photos']) == 1)
+        check("bulk JSON backup includes complete answers/photos", len(backup['surveys']) == 1 and len(backup['surveys'][0]['close']['site_photos']) == 1)
+
+        # A v2.0 short-form record (before the service section existed) must still open and export.
+        v20 = {"meta": {"form_version": "2.0", "ref": "SUR-V20-COMPAT", "saved_at": "2026-09-20T09:00:00Z"},
+               "respondent": {"company_name": "Short Form Twenty", "survey_date": "2026-09-20"},
+               "cameras": {"cams_in_scope": "3"}, "server": {"willing_new_server": "yes_capex"},
+               "model": {"pilot_accept": "yes_free"},
+               "commercial": {"preferred_model": "capex", "total_budget": "₹3–5 lakh", "decision_plan": "Plant head decides", "permissions": ["Site photos approved"], "next_steps": "Send quotation", "site_photos": [PHOTO]}}
+        v20_file = Path(tmp) / 'v20.json'; v20_file.write_text(json.dumps(v20))
+        pg.locator('#btn-import').set_input_files(str(v20_file))
+        pg.wait_for_function("document.querySelectorAll('table.subs tbody tr').length === 2")
+        v20_text = pg.locator('#table').inner_text()
+        check("previous 20-question records keep their next steps and show no invented service cost", 'Send quotation' in v20_text and 'No cost estimate' in v20_text)
+        v20_raw = pg.evaluate(f"JSON.parse(localStorage.getItem('{LS}')).find(r=>r.ref==='SUR-V20-COMPAT').payload")
+        check("previous 20-question record is stored unchanged", v20_raw == v20)
+        v20_index = [i for i, t in enumerate(pg.locator('tbody tr').all_inner_texts()) if 'SUR-V20-COMPAT' in t][0]
+        pg.locator('[data-del]').nth(v20_index).click()
+        pg.wait_for_function("document.querySelectorAll('table.subs tbody tr').length === 1")
 
         # JSON backups and earlier long-form records can be safely merged.
         legacy_file = Path(tmp) / 'earlier.json'; legacy_file.write_text(json.dumps(LEGACY))
@@ -251,7 +309,7 @@ def run(mode="static", url=None):
             pg.wait_for_function("localStorage.getItem('ppe_survey_submissions_v1') === '[]'")
             check("device imports upload to the server without duplicates", len(pg.request.get(base+'api/responses').json()) == 2)
             api_csv = pg.request.get(base+'api/export.csv').text()
-            check("server CSV still supports old and new fields", 'custom_earlier_section.must_survive' in api_csv and 'commercial.next_steps' in api_csv)
+            check("server CSV still supports old and new fields", 'custom_earlier_section.must_survive' in api_csv and 'close.next_steps' in api_csv and 'service.service_estimate._total' in api_csv)
 
         # Migration when opening an old saved draft is additive, not destructive.
         pg.goto(base, wait_until='networkidle')
@@ -260,10 +318,11 @@ def run(mode="static", url=None):
         pg.wait_for_function("document.querySelector('[name=\"respondent.company_name\"]').value === 'Earlier Survey Industries'")
         pg.wait_for_timeout(600)
         migrated = pg.evaluate(f"JSON.parse(localStorage.getItem('{DRAFT}'))")
-        check("earlier draft becomes the 20-question form", pg.locator('[data-question]').count() == 20 and migrated['meta']['form_version'] == '2.0')
+        check("earlier draft becomes the 20-question form", pg.locator('[data-question]').count() == 20 and migrated['meta']['form_version'] == '2.1')
+        check("earlier maintenance expectations land in the service section without a cost estimate", not migrated['service'].get('service_estimate') and not migrated['service'].get('service_arrangement'))
         check("migration retains original sections and zone photos", migrated['safety'] == LEGACY['safety'] and migrated['cameras']['profiles'] == LEGACY['cameras']['profiles'] and migrated['custom_earlier_section'] == LEGACY['custom_earlier_section'])
         check("migration maps accuracy, compute and new-hardware willingness", '92' in migrated['model']['acceptance_targets'] and 'RTX 4060' in migrated['server']['has_existing_server_notes'] and migrated['server']['willing_new_server'] == 'yes_lease')
-        check("migration never invents training consent", 'Video use for model improvement approved' not in migrated['commercial']['permissions'])
+        check("migration never invents training consent", 'Video use for model improvement approved' not in migrated['close']['permissions'])
         pg.locator('#nav button').last.click()
         migrated_export = download_json('#btn-download-json', 'migrated.json')
         check("legacy raw data remains in downloadable output", migrated_export['cameras']['profiles'] == LEGACY['cameras']['profiles'] and migrated_export['next']['fit_score'] == 7)
@@ -280,6 +339,10 @@ def run(mode="static", url=None):
         pg.locator('#menu-btn').click()
         pg.locator('#nav button').nth(3).click()
         check("mobile navigation opens AI expectations", pg.locator('#sec-model').is_visible() and not pg.locator('#sidebar').evaluate("e=>e.classList.contains('open')"))
+        pg.locator('#menu-btn').click(); pg.locator('#nav button').nth(5).click()
+        pg.locator('#question-19 details.estimate summary').click()
+        check("service calculator fits a phone screen", pg.evaluate('document.documentElement.scrollWidth <= innerWidth') and pg.locator('#question-19 .estimate-table').is_visible())
+        pg.locator('#menu-btn').click(); pg.locator('#nav button').nth(3).click()
         check("85% limitation is prominent", '85%' in pg.locator('#sec-model .callout').inner_text() and 'not guaranteed' in pg.locator('#sec-model .callout').inner_text())
         pg.keyboard.press('Alt+ArrowRight')
         check("keyboard navigation still works", pg.locator('#sec-commercial').is_visible())

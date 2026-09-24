@@ -338,6 +338,24 @@ details.sub-detail summary { cursor: pointer; font-size: 12.5px; color: var(--br
 .answer-note[open] { background: #f7f9fd; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 9px; }
 .answer-note .field { margin-top: 7px; }
 .answer-note .lbl { font-size: 11px; color: var(--ink-soft); }
+.followup { margin-top: 14px; }
+.followup .lbl { font-size: 13px; }
+.estimate-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+.estimate-table th, .estimate-table td { padding: 7px 6px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: middle; }
+.estimate-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--ink-faint); }
+.estimate-table td small { display: block; color: var(--ink-faint); font-size: 11px; }
+.estimate-table input { padding: 7px 8px; font-size: 13px; min-width: 84px; }
+.estimate-table .line-total, .estimate-table .grand-total { white-space: nowrap; font-weight: 600; text-align: right; }
+.estimate-table tfoot td { border-top: 2px solid var(--line); font-weight: 700; }
+@media (max-width: 600px) {
+  .estimate-table thead { display: none; }
+  .estimate-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+  .estimate-table td { border: 0; padding: 0; }
+  .estimate-table td:first-child { grid-column: 1 / -1; }
+  .estimate-table .line-total { grid-column: 1 / -1; text-align: left; font-size: 12px; }
+  .estimate-table tfoot tr { grid-template-columns: 1fr auto; }
+  .estimate-table .grand-total { text-align: right; }
+}
 .detail-help { margin: 6px 0 10px; line-height: 1.65; color: var(--ink-soft); font-size: 12px; }
 .photo-drop { display: block; }
 .photo-drop:focus-within { outline: 2px solid var(--brand); }
