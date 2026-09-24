@@ -65,11 +65,11 @@
     if (serverMode === null) { el.textContent = "Checking storage…"; return; }
     el.innerHTML = serverMode
       ? `Storage: <b>survey server</b> (shared across devices)`
-      : `Storage: <b>this device only</b> — export CSV or JSON from this browser`;
+      : `Storage: <b>this device only</b> — keep a JSON copy as a backup`;
     const note = $("#review-storage");
     if (note) note.innerHTML = serverMode
       ? 'Submitting saves to the <b>shared survey server</b>. You can also download a JSON backup.'
-      : 'Submitting saves <b>only in this browser</b>, not in GitHub. Open <a href="submissions.html">Submitted surveys</a> here to export CSV or JSON. Back up before clearing browser data.';
+      : 'Submitting saves <b>only in this browser</b>, not in GitHub. Use <b>Download JSON copy</b> to keep a backup of this survey or share it with the survey owner. Do not clear browser data before backing up.';
   }
 
   /* ------------------------------- state ------------------------------- */
@@ -780,7 +780,6 @@
       toast(`Submitted ✓  Reference: ${ref}`, "ok");
       btn.textContent = `Submitted ✓  ${ref}`;
       renderReview();
-      loadCount();
     } catch (e) {
       toast("Submit failed: " + e.message + ". Use 'Download JSON copy'.", "err");
       btn.disabled = false; btn.textContent = "Submit survey";
@@ -795,19 +794,6 @@
     a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-  }
-
-  function loadCount() {
-    const el = $("#sub-count");
-    if (!el) return;
-    if (serverMode) {
-      getJSON("api/responses").then((rows) => {
-        el.textContent = rows.length ? `${rows.length} submitted` : "none submitted";
-      }).catch(() => { el.textContent = String(localSubs().length) + " on this device"; });
-    } else {
-      const n = localSubs().length;
-      el.textContent = n ? `${n} on this device` : "none submitted";
-    }
   }
 
   /* review-card buttons are re-created by render(), so they must be re-bound
@@ -914,7 +900,7 @@
       toast(state.meta.migrated_from ? "Draft restored. Earlier detailed answers are preserved." : "Draft restored from this device.");
       setSaveIndicator("", "Draft restored");
     }
-    probeServer().then(() => loadCount());
+    probeServer();
 
     $("#menu-btn").onclick = () => $("#sidebar").classList.toggle("open");
 
@@ -933,7 +919,6 @@
       if (t && t.classList && t.classList.contains("invalid")) t.classList.remove("invalid");
     }, true);
 
-    loadCount();
   });
   // Flush a pending keystroke before navigation; debounce must not lose it.
   window.addEventListener("pagehide", () => {

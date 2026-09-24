@@ -109,6 +109,8 @@ def run(mode="static", url=None):
         context = browser.new_context(viewport={"width": 1365, "height": 950}, accept_downloads=True)
         pg = context.new_page()
         errors = []
+        browser_requests = []
+        pg.on("request", lambda request: browser_requests.append((request.method, request.url)))
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("dialog", lambda d: d.accept())
         pg.goto(base, wait_until="networkidle")
@@ -121,6 +123,9 @@ def run(mode="static", url=None):
         check("exactly 20 visible-question containers, no repeated sub-questionnaire", pg.locator("[data-question]").count() == 20 and pg.locator(".rep-item").count() == 0)
         check("five short sections plus review", pg.locator("#nav button").count() == 6)
         check("fresh progress starts at zero", pg.locator("#progress-pct").inner_text() == "0 / 20 answered")
+        check("entry form has no output-dashboard links", pg.locator('a[href*="submissions.html"]').count() == 0)
+        check("entry form does not show submission counts", pg.locator('#sub-count').count() == 0)
+        check("entry form does not fetch the list of surveys", not any(method == 'GET' and url.split('?')[0].endswith('/api/responses') for method, url in browser_requests))
         check("text labels are connected to inputs", pg.locator('[name="respondent.company_name"]').get_attribute("id") == pg.locator("#question-1 > label").get_attribute("for"))
 
         for i, section in enumerate(schema["sections"]):
@@ -170,6 +175,7 @@ def run(mode="static", url=None):
         check("review has no missing required questions", 'All required fields are complete' in pg.locator('#missing').inner_text())
         check("review shows human-readable choices and optional notes", 'Monthly / yearly subscription (OPEX)' in pg.locator('#review-body').inner_text() and 'RTX 4060' in pg.locator('#review-body').inner_text())
         check("review tells the truth about storage", ('shared survey server' if mode == 'server' else 'only in this browser') in pg.locator('#review-storage').inner_text())
+        check("review does not link to the output dashboard", pg.locator('#sec-review a[href*="submissions.html"]').count() == 0)
 
         def download_json(selector, filename):
             with pg.expect_download() as info:
@@ -188,6 +194,7 @@ def run(mode="static", url=None):
         pg.wait_for_function("document.querySelector('#btn-submit').textContent.startsWith('Submitted')")
         ref = pg.evaluate(f"JSON.parse(localStorage.getItem('{DRAFT}')).meta.ref")
         check("submission receives a reference", ref.startswith('SUR-'))
+        check("successful submission does not expose dashboard navigation", pg.locator('a[href*="submissions.html"]').count() == 0)
         records = pg.request.get(base + 'api/responses').json() if mode == 'server' else pg.evaluate(f"JSON.parse(localStorage.getItem('{LS}'))")
         check("submission saved once with reference inside JSON", len(records) == 1 and records[0]['payload']['meta']['ref'] == ref)
 
@@ -269,6 +276,7 @@ def run(mode="static", url=None):
         pg.set_viewport_size({'width':390, 'height':844})
         pg.wait_for_timeout(300)
         check("mobile layout has no horizontal overflow", pg.evaluate('document.documentElement.scrollWidth <= innerWidth'))
+        check("mobile sidebar has no dashboard link", pg.locator('#sidebar a[href*="submissions.html"]').count() == 0)
         pg.locator('#menu-btn').click()
         pg.locator('#nav button').nth(3).click()
         check("mobile navigation opens AI expectations", pg.locator('#sec-model').is_visible() and not pg.locator('#sidebar').evaluate("e=>e.classList.contains('open')"))
@@ -277,6 +285,7 @@ def run(mode="static", url=None):
         check("keyboard navigation still works", pg.locator('#sec-commercial').is_visible())
         pg.goto(base+'checklist.html', wait_until='networkidle')
         check("field checklist has the same 20 questions", pg.locator('.item').count() == 20)
+        check("field checklist has no output-dashboard link", pg.locator('a[href*="submissions.html"]').count() == 0)
         check("no JavaScript exceptions", not errors)
         browser.close()
     print(f'\nALL {count} {mode.upper()} CHECKS PASSED', flush=True)

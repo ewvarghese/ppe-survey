@@ -5,11 +5,28 @@ questions in five sections**, followed by review and submit. Plain-language
 choices, short answers and “Not sure” responses replace the earlier long form.
 Optional notes keep technical detail available without a second questionnaire.
 
-**Live form:** https://ewvarghese.github.io/ppe-survey/
-
-**Output data:** https://ewvarghese.github.io/ppe-survey/submissions.html
+**Survey link to share:** https://ewvarghese.github.io/ppe-survey/
 
 **Printable checklist:** https://ewvarghese.github.io/ppe-survey/checklist.html
+
+## Owner output data
+
+### [Open output dashboard ↗](https://ewvarghese.github.io/ppe-survey/submissions.html)
+
+Use this link to view submissions, export CSV, download JSON or import survey
+files. The form's header, sidebar, review step and field checklist no longer link
+to the dashboard. The form also no longer fetches or displays submission counts.
+
+**On GitHub Pages, open this link in the same device/browser that holds the
+records.** Other surveyors' submissions do not arrive here automatically. They can
+send you their **Download JSON copy** from the form's review step; use **Import
+JSON** on your dashboard to combine those files, then export CSV.
+
+> **Link removal only — not private access.** The repository and dashboard URL
+> remain public; anyone who knows the URL can open the page. It shows the records
+> stored in that browser, or the shared database when using the optional survey
+> server. No owner login or access restriction has been added. Genuine owner-only
+> results require authenticated backend access.
 
 ## The 20 questions
 
@@ -188,6 +205,6 @@ python test_live.py      # deployed Pages, disposable browser storage only
 All three use `test_short_form.py`. Checks cover the exact question count,
 choices, accessibility labels, optional notes/photos, auto-save/reload, honest
 accuracy/consent wording, review/print/PDF, submit/update, dashboard, CSV/JSON
-round-trips, migration of old records, device-to-server upload, mobile layout and
-JavaScript exceptions. Local tests do not alter `surveys.db`. To test another
+round-trips, migration of old records, device-to-server upload, mobile layout, removal of
+respondent-facing dashboard links/count requests, and JavaScript exceptions. Local tests do not alter `surveys.db`. To test another
 static deployment: `SURVEY_URL=https://example.com/survey/ python test_live.py`.
